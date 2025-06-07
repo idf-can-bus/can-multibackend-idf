@@ -1,9 +1,10 @@
 idf_component_register(
-    SRCS "twai.c"
-    PRIV_REQUIRES can_dispatch
+    SRCS "can_backend_twai.c"
+    INCLUDE_DIRS "."
+    REQUIRES can_iface driver
 )
 
-# kompiluj jen když je v menuconfigu vybrán TWAI
-if(NOT CONFIG_CAN_BACKEND_TWAI)
-    set_property(TARGET ${COMPONENT_LIB} PROPERTY EXCLUDE_FROM_ALL 1)
-endif()
+# compile only if TWAI is selected in menuconfig
+# if(NOT CONFIG_CAN_BACKEND_TWAI)
+#     set_property(TARGET ${COMPONENT_LIB} PROPERTY EXCLUDE_FROM_ALL 1)
+# endif()

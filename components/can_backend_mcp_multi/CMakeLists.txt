@@ -1,5 +1,6 @@
 idf_component_register(
   SRCS "mcp_multi.c"
+  INCLUDE_DIRS "."
   PRIV_REQUIRES can_dispatch
 )
 
