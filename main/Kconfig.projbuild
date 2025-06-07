@@ -1,0 +1,53 @@
+
+menu "*** Example to build ***"
+
+    choice
+        prompt "Select CAN driver/library"
+        default CAN_BACKEND_TWAI
+    
+    config CAN_BACKEND_TWAI
+        bool "Built-in TWAI (SN65HVD230)"
+    
+    config CAN_BACKEND_MCP2515
+        bool "MCP2515 single controller"
+    
+    config CAN_BACKEND_MCP_MULTI
+        bool "MCP2515 multi-controller"
+    
+    #config CAN_BACKEND_ARDUINO
+    #    bool "Arduino CAN port"
+    
+    endchoice
+
+    choice
+    prompt "Select example"
+    default EXAMPLE_SEND_SINGLE
+
+    config EXAMPLE_SEND_SINGLE         
+        bool "send_single"
+
+    config EXAMPLE_RECV_POLL_SINGLE    
+        bool "receive_poll_single"
+
+    config EXAMPLE_RECV_INT_SINGLE
+        bool "receive_interrupt_single"
+    
+    config EXAMPLE_SEND_MULTI
+        bool "send_multi"
+        depends on CAN_BACKEND_MCP_MULTI
+    
+    config EXAMPLE_RECV_POLL_MULTI
+        bool "receive_poll_multi"
+        depends on CAN_BACKEND_MCP_MULTI
+    
+    config EXAMPLE_RECV_INT_MULTI      
+        bool "receive_interrupt_multi"
+        depends on CAN_BACKEND_MCP_MULTI
+endchoice
+
+config CAN_CONTROLLER_COUNT
+    int "Number of CAN controllers"
+    depends on CAN_BACKEND_MCP_MULTI
+    range 1 8
+    default 2
+endmenu
