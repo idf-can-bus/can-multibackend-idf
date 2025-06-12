@@ -8,9 +8,22 @@ sdkconfig.*
 .idea/
 
 # Python
-
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
+*.pyzw
 
+# Logs & Errors
+*.log
+*.err
+*.log.*
+*.err.*
+*.log.*.*
+*.err.*.*
 
 # Prerequisites
 *.d
