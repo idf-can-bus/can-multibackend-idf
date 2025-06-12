@@ -1,4 +1,3 @@
-
 menu "*** Example to build ***"
 
     choice
@@ -11,7 +10,7 @@ menu "*** Example to build ***"
     config CAN_BACKEND_MCP2515
         bool "MCP2515 single controller"
     
-    config CAN_BACKEND_MCP_MULTI
+    config CAN_BACKEND_MCP2515_MULTI
         bool "MCP2515 multi-controller"
     
     #config CAN_BACKEND_ARDUINO
@@ -34,20 +33,17 @@ menu "*** Example to build ***"
     
     config EXAMPLE_SEND_MULTI
         bool "send_multi"
-        depends on CAN_BACKEND_MCP_MULTI
+        depends on CAN_BACKEND_MCP2515_MULTI
     
     config EXAMPLE_RECV_POLL_MULTI
         bool "receive_poll_multi"
-        depends on CAN_BACKEND_MCP_MULTI
+        depends on CAN_BACKEND_MCP2515_MULTI
     
     config EXAMPLE_RECV_INT_MULTI      
         bool "receive_interrupt_multi"
-        depends on CAN_BACKEND_MCP_MULTI
+        depends on CAN_BACKEND_MCP2515_MULTI
 endchoice
 
-config CAN_CONTROLLER_COUNT
-    int "Number of CAN controllers"
-    depends on CAN_BACKEND_MCP_MULTI
-    range 1 8
-    default 2
 endmenu
+
+
