@@ -67,6 +67,8 @@ class FlashAppGui(App):
         border: solid $primary;
     }
     
+    
+    
     """
 
     BINDINGS = [
@@ -107,7 +109,7 @@ class FlashAppGui(App):
 
         # Create logic instance with reference to this GUI
         self.logic = FlashAppLogic(idf_setup_path, kconfig_path, sdkconfig_path, gui_app=self,
-                                   menu_name="*** Example to build ***")
+                                   menu_name="*** CAN bus examples  ***")
 
         # Initialize ports
         self.ports = self.logic.find_flash_ports()
@@ -172,6 +174,7 @@ class FlashAppGui(App):
         except Exception as e:
             logger.error(f"Failed to clear log: {e}")
 
+
     def show_loading(self, message: str = "Compiling...") -> None:
         """Show loading indicator with message"""
         try:
@@ -189,15 +192,15 @@ class FlashAppGui(App):
             # Mount it to the app
             self.mount(loading)
             
-            # Log the message
-            logger.info(f"⏳ {message}")
-            
-            # Force refresh of RichLog
-            try:
-                rich_log = self.query_one(RichLog)
-                rich_log.refresh()
-            except:
-                pass
+            # Write message directly to RichLog for immediate display
+            # try:
+            #     rich_log = self.query_one(RichLog)
+            #     rich_log.write(f"INFO: ⏳ {message}")
+            #     rich_log.refresh()
+            #     # Force app refresh to ensure immediate display
+            #     self.refresh()
+            # except Exception as e:
+            #     logger.error(f"Failed to write to RichLog: {e}")
                 
         except Exception as e:
             logger.error(f"Failed to show loading indicator: {e}")
@@ -281,10 +284,23 @@ class FlashAppGui(App):
                     lib_select = grid.children[base_idx + 1]  # lib is 2nd column (index 1)
                     example_select = grid.children[base_idx + 2]  # example is 3rd column (index 2)
 
-                    # Execute flash sequence using logic and handle result
-                    success = self.logic.config_compile_flash(port, lib_select.value, example_select.value)
-                    if success:
-                        logger.info(f"Flash operation completed successfully for {port}")
-                    else:
-                        logger.error(f"Flash operation failed for {port}")
+                    # Execute flash sequence asynchronously to keep GUI responsive
+                    self.run_worker(
+                        self._flash_worker(port, lib_select.value, example_select.value),
+                        name=f"flash_{port}"
+                    )
                     break
+
+    async def _flash_worker(self, port: str, lib_id: str, example_id: str):
+        """Async worker for flash operation"""
+        try:
+            # Execute flash sequence using logic and handle result
+            self.logic.config_compile_flash(port, lib_id, example_id)
+            
+            # Zprávy o úspěchu/neúspěchu jsou již zalogovány v jednotlivých krocích
+            # (v _compile_code a _flash_firmware), takže zde není potřeba nic logovat
+            
+        except Exception as e:
+            logger.error(f"❌ Flash operation failed with exception: {e}")
+            import traceback
+            logger.debug(traceback.format_exc()) 

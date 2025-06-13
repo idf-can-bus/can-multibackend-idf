@@ -37,7 +37,7 @@ class FlashAppLogic:
             kconfig_path: str = "./main/Kconfig.projbuild",
             sdkconfig_path: str = "./sdkconfig",
             gui_app=None,
-            menu_name: str = "*** Example to build ***"
+            menu_name: str = "*** CAN bus examples  ***"
     ):
         self.idf_setup_path = idf_setup_path
         self.kconfig_path = kconfig_path
@@ -47,6 +47,12 @@ class FlashAppLogic:
         self.kconfig_dict = None  # Will be initialized in re_init()
         self.sdkconfig = None  # Will be initialized in re_init()
         self.lib_options = []  # List of ConfigOption for libraries, will be initialized in re_init()
+        
+        # Compilation monitoring attributes
+        self.compilation_process = None
+        self.compilation_lib_id = None
+        self.compilation_example_id = None
+        
         self.re_init()
 
     def re_init(self):
@@ -77,7 +83,7 @@ class FlashAppLogic:
         """Find example option by ID using KconfigMenuItems"""
         return self.kconfig_dict.get_option_by_id("Select example", example_id)
 
-    def check_dependencies(self, lib_id: str, example_id: str) -> bool:
+    def check_dependencies(self, lib_id: str, example_id: str, prompt_char: str = '✏️') -> bool:
         """Check if selected lib satisfies ALL example dependencies"""
         if not lib_id or not example_id:
             return False
@@ -85,35 +91,35 @@ class FlashAppLogic:
         lib_option = self.get_lib_option_by_id(lib_id)
         example_option = self.get_example_option_by_id(example_id)
 
-        logger.debug(f"lib_id='{lib_id}', lib_option={lib_option}")
-        logger.debug(f"example_id='{example_id}', example_option={example_option}")
+        logger.debug(f"{prompt_char} lib_id='{lib_id}', lib_option={lib_option}")
+        logger.debug(f"{prompt_char} example_id='{example_id}', example_option={example_option}")
 
         if not lib_option or not example_option:
-            logger.debug("One or both options not found")
+            logger.debug(f"{prompt_char} One or both options not found")
             return False
 
         # If example has no dependencies, it's always compatible
         if not example_option.depends_on:
-            logger.debug("No dependencies required - compatible")
+            logger.debug(f"{prompt_char} No dependencies required - compatible")
             return True
 
         # Check if selected lib ID is in the depends_on list
         if lib_option.id in example_option.depends_on:
-            logger.debug(f"{lib_option.id} found in dependencies {example_option.depends_on} -> OK")
+            logger.debug(f"{prompt_char} {lib_option.id} found in dependencies {example_option.depends_on} -> OK")
             return True
         else:
-            logger.debug(f"{lib_option.id} NOT found in dependencies {example_option.depends_on} -> FAIL")
+            logger.debug(f"{prompt_char} {lib_option.id} NOT found in dependencies {example_option.depends_on} -> FAIL")
             return False
 
-    def update_sdkconfig(self, lib_id: str, example_id: str) -> bool:
+    def update_sdkconfig(self, lib_id: str, example_id: str, prompt_char: str = '✏️') -> bool:
         """Update sdkconfig using new Sdkconfig classes"""
         try:
-            logger.info(f"Updating sdkconfig for lib='{lib_id}' and example='{example_id}'")
+            logger.info(f"{prompt_char} Updating sdkconfig for lib='{lib_id}' and example='{example_id}'")
 
             # Step 1: Get all config option IDs from KconfigMenuItems
             all_options = self.kconfig_dict.get_all_options()
             config_ids = list(all_options.keys())
-            logger.debug(f"Found {len(config_ids)} config options: {config_ids}")
+            logger.debug(f"{prompt_char} Found {len(config_ids)} config options: {config_ids}")
 
             # Step 2: Find relevant SdkconfigLines for these IDs
             relevant_lines = {}
@@ -134,25 +140,25 @@ class FlashAppLogic:
                 # Determine new value based on selection
                 if config_id == lib_id:
                     new_value = 'y'
-                    logger.info(f"ENABLE: {config_id} (selected lib)")
+                    logger.info(f"{prompt_char} ENABLE: {config_id} (selected lib)")
                 elif config_id == example_id:
                     new_value = 'y'
-                    logger.info(f"ENABLE: {config_id} (selected example)")
+                    logger.info(f"{prompt_char} ENABLE: {config_id} (selected example)")
                 else:
                     new_value = 'n'
-                    logger.debug(f"DISABLE: {config_id} (not selected)")
+                    logger.debug(f"{prompt_char} DISABLE: {config_id} (not selected)")
 
                 # Update line if value changed
                 if line.value != new_value:
                     line.set_value(new_value)
                     changes_made += 1
-                    logger.debug(f"Changed {config_id}: {line.value} -> {new_value}")
+                    logger.debug(f"{prompt_char} Changed {config_id}: {line.value} -> {new_value}")
 
             # Step 4: Write sdkconfig if any changes were made
             if changes_made > 0:
-                logger.info(f"Writing sdkconfig with {changes_made} changes")
+                logger.info(f"{prompt_char} Writing sdkconfig with {changes_made} changes")
                 self.sdkconfig.write()
-                logger.info("Successfully updated sdkconfig")
+                logger.info(f"{prompt_char} Successfully updated sdkconfig")
             else:
                 logger.info("No changes needed in sdkconfig")
 
@@ -164,38 +170,35 @@ class FlashAppLogic:
             logger.debug(traceback.format_exc())
             return False
 
-    def compile_code(self, lib_id: str, example_id: str) -> bool:
-        """Compile the C/C++ code for selected configuration"""
-        process = None
+    def _update_config(self, lib_id: str, example_id: str, prompt_char: str = '✏️') -> bool:
+        """
+        Step 1: Update sdkconfig configuration
+        Returns True if successful, False otherwise
+        """
+        return self.update_sdkconfig(lib_id, example_id, prompt_char)
+
+    def _compile_code(self, lib_id: str, example_id: str, prompt_char: str = '⚒️') -> bool:
+        """
+        Step 2: Compile the code
+        Returns True if compilation successful, False otherwise
+        """
         try:
-            logger.info(f"Starting compilation for {lib_id}/{example_id}")
-            
-            # Show loading indicator if GUI is available
+            # Show loading indicator
             if self.gui_app:
                 self.gui_app.show_loading(f"=== Compiling {lib_id}/{example_id}...")
             
-            # Prepare the command that sources ESP-IDF environment and runs idf.py all
-            # Using bash -c to execute both source and idf.py in the same shell
+            # Prepare command
             cmd = f'bash -c "source {self.idf_setup_path} && idf.py all"'
-            logger.info(f"Executing: {cmd}")
-            
-            # Force refresh of RichLog before starting process
-            if self.gui_app:
-                try:
-                    rich_log = self.gui_app.query_one("RichLog")
-                    rich_log.refresh()
-                    time.sleep(0.2)
-                except:
-                    pass
+            logger.info(f"{prompt_char} Executing: {cmd}")
             
             # Ensure log directory exists
             os.makedirs(os.path.dirname(os.path.abspath("compile.log.txt")), exist_ok=True)
             
-            # Open log files
+            # Run compilation process and wait for completion
             with open("compile.log.txt", "w", encoding="utf-8") as log_file, \
                  open("compile.err.txt", "w", encoding="utf-8") as err_file:
                 
-                # Write headers to log files
+                # Write headers
                 log_file.write(f"=== ESP32 Compilation Log ===\n")
                 log_file.write(f"Library: {lib_id}\n")
                 log_file.write(f"Example: {example_id}\n")
@@ -210,188 +213,170 @@ class FlashAppLogic:
                 err_file.write(f"{'='*50}\n\n")
                 err_file.flush()
                 
-                # Use pty for unbuffered output - better real-time streaming
-                master_fd, slave_fd = pty.openpty()
+                # Run process and wait for completion
+                process = subprocess.run(
+                    cmd,
+                    shell=True,
+                    stdout=log_file,
+                    stderr=err_file,
+                    universal_newlines=True
+                )
                 
-                try:
-                    # Start the process with pty for unbuffered output
-                    process = subprocess.Popen(
-                        cmd,
-                        shell=True,
-                        stdout=slave_fd,
-                        stderr=subprocess.STDOUT,  # Merge stderr to stdout for simplicity
-                        universal_newlines=True,
-                        preexec_fn=os.setsid,  # Create new process group for easier termination
-                        env=dict(os.environ, PYTHONUNBUFFERED='1')  # Force unbuffered Python output
-                    )
-                    
-                    # Close slave fd in parent process
-                    os.close(slave_fd)
-                    
-                    # Function to read from master fd and log in real-time
-                    def read_output():
-                        try:
-                            buffer = ""
-                            while True:
-                                # Use select to check if data is available (non-blocking)
-                                ready, _, _ = select.select([master_fd], [], [], 0.1)
-                                if ready:
-                                    try:
-                                        data = os.read(master_fd, 1024).decode('utf-8', errors='replace')
-                                        if not data:
-                                            break
-                                        
-                                        buffer += data
-                                        
-                                        # Process complete lines
-                                        while '\n' in buffer:
-                                            line, buffer = buffer.split('\n', 1)
-                                            if line.strip():  # Only log non-empty lines
-                                                # Determine if it's error or info based on content
-                                                if any(keyword in line.lower() for keyword in ['error', 'failed', 'fatal']):
-                                                    logger.error(f"COMPILE: {line}")
-                                                    err_file.write(f"{line}\n")
-                                                    err_file.flush()
-                                                elif any(keyword in line.lower() for keyword in ['warning', 'warn']):
-                                                    logger.warning(f"COMPILE: {line}")
-                                                    log_file.write(f"{line}\n")
-                                                    log_file.flush()
-                                                else:
-                                                    logger.info(f"COMPILE: {line}")
-                                                    log_file.write(f"{line}\n")
-                                                    log_file.flush()
-                                    except OSError:
-                                        # Master fd closed
-                                        break
-                                else:
-                                    # Check if process is still running
-                                    if process.poll() is not None:
-                                        # Process finished, read any remaining data
-                                        try:
-                                            remaining_data = os.read(master_fd, 4096).decode('utf-8', errors='replace')
-                                            if remaining_data:
-                                                buffer += remaining_data
-                                                # Process remaining lines
-                                                lines = buffer.split('\n')
-                                                for line in lines[:-1]:  # All but last (might be incomplete)
-                                                    if line.strip():
-                                                        logger.info(f"COMPILE: {line}")
-                                                        log_file.write(f"{line}\n")
-                                                        log_file.flush()
-                                        except OSError:
-                                            pass
-                                        break
-                                    
-                        except Exception as e:
-                            logger.error(f"Error reading output: {e}")
-                    
-                    # Start thread to read output in real-time
-                    output_thread = threading.Thread(target=read_output)
-                    output_thread.daemon = True
-                    output_thread.start()
-                    
-                    # Wait for process to complete with timeout (5 minutes)
-                    start_time = time.time()
-                    timeout = 300  # 5 minutes
-                    
-                    while True:
-                        return_code = process.poll()
-                        if return_code is not None:
-                            break
-                            
-                        if time.time() - start_time > timeout:
-                            logger.error("Compilation timed out after 5 minutes")
-                            # Kill the entire process group
-                            try:
-                                os.killpg(os.getpgid(process.pid), 9)
-                            except:
-                                process.kill()
-                            return False
-                            
-                        time.sleep(0.1)  # Small sleep to prevent busy waiting
-                    
-                    # Wait for output thread to finish reading (with timeout)
-                    output_thread.join(timeout=5)
-                    
-                finally:
-                    # Clean up file descriptors
-                    try:
-                        os.close(master_fd)
-                    except:
-                        pass
-                
-                # Write summary to log files
-                log_file.write(f"\n{'='*50}\n")
-                log_file.write(f"Compilation finished with return code: {return_code}\n")
-                log_file.flush()
-                
-                err_file.write(f"\n{'='*50}\n")
-                err_file.write(f"Compilation finished with return code: {return_code}\n")
-                err_file.flush()
-                
-                # Check compilation result
-                if return_code == 0:
-                    logger.info("Compilation completed successfully")
-                    # Hide loading indicator
-                    if self.gui_app:
-                        self.gui_app.hide_loading()
-                    return True
+                # Process results
+                if process.returncode == 0:
+                    logger.info(f"{prompt_char} ✅ Compilation completed successfully")
                 else:
-                    logger.error(f"Compilation failed with return code: {return_code}")
-                    # Hide loading indicator
-                    if self.gui_app:
-                        self.gui_app.hide_loading()
-                    return False
-                    
+                    logger.error(f"{prompt_char} ❌ Compilation failed with return code: {process.returncode}")
+                
+                # Load and display log file contents
+                try:
+                    with open("compile.log.txt", "r", encoding="utf-8") as f:
+                        log_content = f.read()
+                        if log_content.strip():
+                            for line in log_content.strip().split('\n'):
+                                if line.strip():
+                                    if any(keyword in line.lower() for keyword in ['error', 'failed', 'fatal']):
+                                        logger.error(f"{prompt_char} stdout: {line}")
+                                    elif any(keyword in line.lower() for keyword in ['warning', 'warn']):
+                                        logger.warning(f"{prompt_char} stdout: {line}")
+                                    else:
+                                        logger.info(f"{prompt_char} stdout: {line}")
+                except Exception as e:
+                    logger.error(f"Failed to read compile.log.txt: {e}")
+                
+                # Load and display error file contents
+                try:
+                    with open("compile.err.txt", "r", encoding="utf-8") as f:
+                        err_content = f.read()
+                        if err_content.strip():
+                            for line in err_content.strip().split('\n'):
+                                if line.strip() and not line.startswith('==='):
+                                    logger.error(f"{prompt_char} stderr: {line}")
+                except Exception as e:
+                    logger.error(f"Failed to read compile.err.txt: {e}")
+                
+                return process.returncode == 0
+                
         except Exception as e:
-            logger.error(f"Compilation failed: {e}")
+            logger.error(f"Failed to compile code: {e}")
             import traceback
             logger.debug(traceback.format_exc())
-            # Hide loading indicator on error
+            return False
+        finally:
+            # Hide loading indicator
             if self.gui_app:
                 self.gui_app.hide_loading()
-            if process:
-                try:
-                    process.terminate()
-                except:
-                    pass
-            return False
 
-    def upload_to_port(self, port: str, lib_id: str, example_id: str) -> bool:
-        """Upload compiled firmware to ESP32 on specified port"""
+    def _flash_firmware(self, port: str, lib_id: str, example_id: str, prompt_char: str = '⚡') -> bool:
+        """
+        Step 3: Flash firmware to ESP32
+        Returns True if flash successful, False otherwise
+        """
         try:
-            logger.info(f"Uploading firmware to ESP32 on port {port}")
-            # TODO: Implement actual upload
-            # - Run idf.py flash -p /dev/{port} or similar command
-            # - Monitor upload progress
-            # - Check for upload errors
-
-            # Placeholder implementation
-            logger.info(f"Successfully uploaded firmware to {port}")
-            return True
-
+            # Show loading indicator
+            if self.gui_app:
+                self.gui_app.show_loading(f"=== Flashing {lib_id}/{example_id} to {port}...")
+            
+            # Prepare command
+            cmd = f'bash -c "source {self.idf_setup_path} && idf.py -p /dev/{port} flash"'
+            logger.info(f"{prompt_char} Executing: {cmd}")
+            
+            # Ensure log directory exists
+            os.makedirs(os.path.dirname(os.path.abspath("flash.log.txt")), exist_ok=True)
+            
+            # Run flash process and wait for completion
+            with open("flash.log.txt", "w", encoding="utf-8") as log_file, \
+                 open("flash.err.txt", "w", encoding="utf-8") as err_file:
+                
+                # Write headers
+                log_file.write(f"=== ESP32 Flash Log ===\n")
+                log_file.write(f"Port: {port}\n")
+                log_file.write(f"Library: {lib_id}\n")
+                log_file.write(f"Example: {example_id}\n")
+                log_file.write(f"Command: {cmd}\n")
+                log_file.write(f"{'='*50}\n\n")
+                log_file.flush()
+                
+                err_file.write(f"=== ESP32 Flash Errors ===\n")
+                err_file.write(f"Port: {port}\n")
+                err_file.write(f"Library: {lib_id}\n")
+                err_file.write(f"Example: {example_id}\n")
+                err_file.write(f"Command: {cmd}\n")
+                err_file.write(f"{'='*50}\n\n")
+                err_file.flush()
+                
+                # Run process and wait for completion
+                process = subprocess.run(
+                    cmd,
+                    shell=True,
+                    stdout=log_file,
+                    stderr=err_file,
+                    universal_newlines=True
+                )
+                
+                # Process results
+                if process.returncode == 0:
+                    logger.info(f"{prompt_char} ✅ Flash completed successfully")
+                else:
+                    logger.error(f"{prompt_char} ❌ Flash failed with return code: {process.returncode}")
+                
+                # Load and display log file contents
+                try:
+                    with open("flash.log.txt", "r", encoding="utf-8") as f:
+                        log_content = f.read()
+                        if log_content.strip():
+                            for line in log_content.strip().split('\n'):
+                                if line.strip():
+                                    if any(keyword in line.lower() for keyword in ['error', 'failed', 'fatal']):
+                                        logger.error(f"{prompt_char} stdout: {line}")
+                                    elif any(keyword in line.lower() for keyword in ['warning', 'warn']):
+                                        logger.warning(f"{prompt_char} stdout: {line}")
+                                    else:
+                                        logger.info(f"{prompt_char} stdout: {line}")
+                except Exception as e:
+                    logger.error(f"Failed to read flash.log.txt: {e}")
+                
+                # Load and display error file contents
+                try:
+                    with open("flash.err.txt", "r", encoding="utf-8") as f:
+                        err_content = f.read()
+                        if err_content.strip():
+                            for line in err_content.strip().split('\n'):
+                                if line.strip() and not line.startswith('==='):
+                                    logger.error(f"{prompt_char} stderr: {line}")
+                except Exception as e:
+                    logger.error(f"Failed to read flash.err.txt: {e}")
+                
+                return process.returncode == 0
+                
         except Exception as e:
-            logger.error(f"Upload to {port} failed: {e}")
+            logger.error(f"Failed to flash firmware: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
             return False
+        finally:
+            # Hide loading indicator
+            if self.gui_app:
+                self.gui_app.hide_loading()
 
     def config_compile_flash(self, port: str, lib_id: str, example_id: str) -> bool:
         """
         Execute complete flash sequence: update config, compile, upload
         Returns True if all steps successful, False if any step fails
         """
-        # Step 1: Update sdkconfig using app method
-        if not self.update_sdkconfig(lib_id, example_id):
+        # Step 1: Update sdkconfig
+        if not self._update_config(lib_id, example_id):
             logger.error("Flash sequence aborted: sdkconfig update failed")
             return False
 
         # Step 2: Compile code
-        if not self.compile_code(lib_id, example_id):
+        if not self._compile_code(lib_id, example_id):
             logger.error("Flash sequence aborted: compilation failed")
             return False
 
-        # Step 3: Upload to ESP32
-        if not self.upload_to_port(port, lib_id, example_id):
-            logger.error("Flash sequence aborted: upload failed")
+        # Step 3: Flash firmware
+        if not self._flash_firmware(port, lib_id, example_id):
+            logger.error("Flash sequence aborted: flash failed")
             return False
 
         return True

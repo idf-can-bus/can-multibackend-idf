@@ -28,4 +28,6 @@ class RichLogHandler(logging.Handler):
     def emit(self, record):
         if self.rich_log:
             msg = self.format(record)
-            self.rich_log.write(msg) 
+            self.rich_log.write(msg)
+            # Force refresh to ensure immediate display
+            self.rich_log.refresh() 
