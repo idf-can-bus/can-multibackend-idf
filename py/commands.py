@@ -28,7 +28,7 @@ class ShellCommandRunner:
     Supports both stdout and stderr streams.
     """
 
-    def run_command(self, command_obj_list: [ShellCommand], logger) -> int:
+    def run_commands(self, command_obj_list: [ShellCommand], logger, show_stderr: bool = True) -> int:
         """
         Run a shell command and display its output in real-time.
         
@@ -70,13 +70,10 @@ class ShellCommandRunner:
                     # Convert binary data to text
                     text = line.decode('utf-8').strip()
                     if stream == process.stdout:
-                        # rich_log.write(f"R-INFO: {text}\n")
                         logger.info(f'{command_obj.prompt} {text}')
                     else:
-                        # rich_log.write(f"R-ERROR: {text}\n")
-                        logger.error(f'{command_obj.prompt} {text}')
-                    # rich_log.refresh()
-            
+                        if show_stderr:
+                            logger.error(f'{command_obj.prompt} {text}')
             # Short pause to prevent CPU overload
             time.sleep(0.01)
 
@@ -84,9 +81,10 @@ class ShellCommandRunner:
         for line in iter(process.stdout.readline, b''):
             text = line.decode('utf-8').strip()
             logger.info(f'{command_obj.prompt} {text}')
-        for line in iter(process.stderr.readline, b''):
-            text = line.decode('utf-8').strip()
-            logger.error(f'{command_obj.prompt} {text}')
+        if show_stderr:
+            for line in iter(process.stderr.readline, b''):
+                text = line.decode('utf-8').strip()
+                logger.error(f'{command_obj.prompt} {text}')
 
         # Close the streams
         process.stdout.close()
@@ -95,14 +93,14 @@ class ShellCommandRunner:
         # Wait for the process to complete and get the exit code
         process.wait()
         if process.returncode != 0:
-            logger.error(f"Command '{command_obj.name}' failed with exit code {process.returncode}")
+            logger.error(f"\n❌ Command '{command_obj.name}' failed with exit code {process.returncode}\n")
         else:
-            logger.info(f"Command '{command_obj.name}' completed successfully with exit code {process.returncode}")
+            logger.info(f"\n✅ Command '{command_obj.name}' completed successfully with exit code {process.returncode}\n")
 
         # If there is a next command, run it recursively
         if (process.returncode==0) :
             time.sleep(0.3)  # Optional delay before running the next command
-            return self.run_command(command_obj_list[1:], logger)
+            return self.run_commands(command_obj_list[1:], logger, show_stderr)
 
         return process.returncode
 

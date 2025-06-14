@@ -151,7 +151,7 @@ class RunnerTestGuiApp(App, ShellCommandRunner):
 
         # Run command in a separate thread to keep UI responsive
         thread = threading.Thread(
-            target=self.run_command,
+            target=self.run_commands,
             args=(chain_of_commands, logger)
         )
         thread.start()
