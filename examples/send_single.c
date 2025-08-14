@@ -32,6 +32,9 @@ void app_main(void)
     const uint64_t max_index = 1000;
     sender_id_t sender_id = SENDER_ID_1;
 
+    // identify your self as sender
+    ESP_LOGI(TAG, "Sender ID: %d", sender_id);
+
     while (1)
     {
         // create message

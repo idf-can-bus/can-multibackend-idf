@@ -80,8 +80,12 @@ class Sdkconfig:
             import traceback
             logger.debug(traceback.format_exc())
 
+    def _normalize_key(self, key: str) -> str:
+        return key if key.startswith('CONFIG_') else f'CONFIG_{key}'
+
     def get_line_by_key(self, key: str) -> Optional[SdkconfigLine]:
         """Get SdkconfigLine for given key"""
+        key = self._normalize_key(key)
         return self._sdkconfig_lines.get(key)
 
     def add_no_existing_bool_keys(self, keys: List[str]) -> None:
@@ -92,6 +96,7 @@ class Sdkconfig:
             keys: List of keys to check and add if missing
         """
         for key in keys:
+            key = self._normalize_key(key)
             if key not in self._sdkconfig_lines:
                 logger.debug(f"Adding missing key: {key}")
                 self._sdkconfig_lines[key] = SdkconfigLine(key, 'n', f"{key}=n\n")

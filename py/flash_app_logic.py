@@ -182,6 +182,7 @@ class FlashAppLogic(ShellCommandRunner):
             logger.error("Flash sequence aborted: sdkconfig update failed")
             return False
 
+
         list_of_dependig_commands = [
             # Step 2: Compile code
             ShellCommand(

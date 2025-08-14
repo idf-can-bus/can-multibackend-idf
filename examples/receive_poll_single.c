@@ -41,6 +41,9 @@ void app_main(void)
 
     reset_latency_statistic(&latency_statistic);
 
+    // identify your self as receiver   
+    ESP_LOGI(TAG, "Receiver pool, single controller");
+
     while (1)
     {
         // send message

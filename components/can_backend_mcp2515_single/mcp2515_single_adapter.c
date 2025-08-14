@@ -96,23 +96,23 @@ bool mcp2515_single_init(const mcp2515_single_config_t *cfg) {
         .intr_type = GPIO_INTR_NEGEDGE
     };
     
-    ret = gpio_config(&io_conf);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to configure GPIO %d: %s", cfg->int_pin, esp_err_to_name(ret));
+    err = gpio_config(&io_conf);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to configure GPIO %d: %s", cfg->int_pin, esp_err_to_name(err));
         return false;
     }
     
     // Step 9: Install ISR service
-    ret = gpio_install_isr_service(0);
-    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {  // ESP_ERR_INVALID_STATE means already installed
-        ESP_LOGE(TAG, "Failed to install ISR service: %s", esp_err_to_name(ret));
+    err = gpio_install_isr_service(0);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "Failed to install ISR service: %s", esp_err_to_name(err));
         return false;
     }
     
     // Step 10: Add interrupt handler
-    ret = gpio_isr_handler_add(cfg->int_pin, isr_handler, NULL);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to add interrupt handler: %s", esp_err_to_name(ret));
+    err = gpio_isr_handler_add(cfg->int_pin, isr_handler, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to add interrupt handler: %s", esp_err_to_name(err));
         return false;
     }
     

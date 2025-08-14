@@ -8,7 +8,7 @@
 #include "twai_adapter.h"
 #elif CONFIG_CAN_BACKEND_MCP2515_SINGLE
 #include "mcp2515_single_adapter.h"
-#elif CONFIG_CAN_BACKEND_MCP_MULTI
+#elif CONFIG_CAN_BACKEND_MCP2515_MULTI
 #include "mcp2515_multi_adapter.h"
 #elif CONFIG_CAN_BACKEND_ARDUINO
 #include "can_backend_arduino.h"
@@ -30,10 +30,12 @@ extern "C" {
 #elif CONFIG_CAN_BACKEND_MCP2515_SINGLE
     /* call MCP2515 backend */
     typedef mcp2515_single_config_t can_config_t;
-#elif CONFIG_CAN_BACKEND_MCP_MULTI
+#elif CONFIG_CAN_BACKEND_MCP2515_MULTI
     /* call multi-MCP backend */
+    typedef mcp2515_single_config_t can_config_t;  // Use same config for now
 #elif CONFIG_CAN_BACKEND_ARDUINO
     /* call Arduino backend */
+    // TODO: Define Arduino config type
 #endif
 
 // Initialize CAN hardware
