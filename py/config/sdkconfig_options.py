@@ -52,6 +52,10 @@ class Sdkconfig:
         # Load existing sdkconfig
         self._load_sdkconfig()
 
+    def set_sdkconfig_path(self, sdkconfig_path: str) -> None:
+        """Set the path to the sdkconfig file"""
+        self.sdkconfig_path = sdkconfig_path
+
     def _load_sdkconfig(self) -> None:
         """Load and parse sdkconfig file"""
         if not os.path.exists(self.sdkconfig_path):

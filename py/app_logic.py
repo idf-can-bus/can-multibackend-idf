@@ -12,9 +12,13 @@ import glob
 import re
 from typing import List, Optional, Type, Any
 import traceback
-            
-from py.shell_commands import ShellCommandConfig, ShellCommandProcess
+import os
+import shutil
+import time 
+import multiprocessing
+import psutil
 
+from py.shell_commands import ShellCommandConfig, ShellCommandProcess
 from py.config.kconfig_options import ConfigOption, KconfigMenuItems
 from py.config.sdkconfig_options import Sdkconfig
 from .log.rich_log_handler import LogSource, RichLogHandler
@@ -29,6 +33,8 @@ class FlashApp:
     Logic class for ESP32 flash operations
     Handles all business logic separate from GUI
     """
+
+    WORKSPACES_DIR = ".workspaces"
 
     def __init__(
             self,
@@ -55,6 +61,7 @@ class FlashApp:
         self.compilation_example_id = None
 
         self.re_init()
+        self._workspace_path = sdkconfig_path
 
     def re_init(self):
         # Load KconfigMenuItems for direct access
@@ -112,10 +119,43 @@ class FlashApp:
             config_logger.debug(f"{prompt_char} {lib_option.id} NOT found in dependencies {example_option.depends_on} -> FAIL")
             return False
 
+    def _switch_to_workspace(self, lib_id: str, example_id: str ):
+        """
+        Switch to workspace
+        Copy sdkconfig to workspace if target not exists.
+        Can change self._workspace_path to workspace sdkconfig.
+        """
+        def create_symbolic_link(old_path: str, link_path: str):            
+            if not os.path.islink(link_path):
+                reconfig_logger.info(f"Create symbolic link from \n{link_path} \nto \n{old_path}")
+                os.symlink(old_path, link_path)
+        reconfig_logger.info(f"Switching to workspace for lib='{lib_id}' and example='{example_id}'")
+        workspace_dir = os.path.join(self.WORKSPACES_DIR, f"{lib_id}_{example_id}")
+        workspace_dir = os.path.realpath(os.path.expanduser(workspace_dir))
+        if not os.path.exists(workspace_dir):
+            os.makedirs(workspace_dir)
+        # Create symbolic links to all source directories in not already exists and is not have a special name.
+        link_list = [x for x in os.listdir(".") if os.path.isdir(x) and x!='build' and (not x.startswith('.'))]
+        link_list.append("CMakeLists.txt")
+        for item in link_list:
+            abs_old_path = os.path.abspath(f"./{item}")
+            abs_link_path = os.path.abspath(f"{workspace_dir}/{item}")
+            create_symbolic_link(abs_old_path, abs_link_path)
+        # Copy sdkconfig to workspace if target not exists
+        if not os.path.exists(f"{workspace_dir}/sdkconfig"):
+            shutil.copy(self.sdkconfig_path, f"{workspace_dir}/sdkconfig")
+        else:
+            # Reload sdkconfig from workspace
+            self.sdkconfig = Sdkconfig(f"{workspace_dir}/sdkconfig", self.menu_name)
+        self._workspace_path = workspace_dir
+        reconfig_logger.info(f"Switched to workspace: {workspace_dir}")
+        return True
+
+
     def _update_sdkconfig(self, lib_id: str, example_id: str ):
         """Update sdkconfig using new Sdkconfig classes"""
         try:
-            reconfig_logger.info(f"Updating sdkconfig for lib='{lib_id}' and example='{example_id}'")
+            reconfig_logger.info(f"Consider to update sdkconfig for lib='{lib_id}' and example='{example_id}'")
 
             # Step 1: Get all config option IDs from KconfigMenuItems
             all_options = self.kconfig_dict.get_all_options()
@@ -150,6 +190,7 @@ class FlashApp:
                     reconfig_logger.debug(f"DISABLE: {config_id} (not selected)")
 
                 # Update line if value changed
+                reconfig_logger.info(f"Consider to change {config_id}: '{line.value}' -> '{new_value}'")
                 if line.value != new_value:
                     line.set_value(new_value)
                     changes_made += 1
@@ -158,8 +199,8 @@ class FlashApp:
             # Step 4: Write sdkconfig if any changes were made
             if changes_made > 0:
                 reconfig_logger.info(f"Writing sdkconfig with {changes_made} changes")
-                self.sdkconfig.write()
-                reconfig_logger.info(f"Successfully updated sdkconfig")
+                self.sdkconfig.set_sdkconfig_path(f'{self._workspace_path}/sdkconfig')
+                self.sdkconfig.write()                
             else:
                 reconfig_logger.info("No changes needed in sdkconfig")
 
@@ -220,9 +261,20 @@ class FlashApp:
 
     async def config_compile_flash(self, port: str, lib_id: str, example_id: str) -> bool:
         """
-        Execute complete flash sequence: update config, compile, upload
+        Execute complete flash sequence: switch to workspace,update config, compile, upload
         Returns True if all steps successful, False if any step fails
         """
+
+        # Step 0: Switch to workspace
+        success0 = await self.call_with_results(
+            target=self._switch_to_workspace,
+            name="Switch to workspace",
+            logger=reconfig_logger,
+            lib_id=lib_id, example_id=example_id
+        )
+        if not success0:
+            return False
+
 
         # python_logger.info(f"config_compile_flash")
         # Step 1: Update sdkconfig
@@ -237,11 +289,17 @@ class FlashApp:
             return False
 
         # Step 2: Run building asynchronously
+        jobs = self.get_optimal_jobs()
+        should_fullclean = self.should_fullclean(None, None)  # TODO: add old and new config
+        if should_fullclean:
+            command = f"bash -c 'export MAKEFLAGS=-j{jobs} && source {self.idf_setup_path} && cd {self._workspace_path} && idf.py fullclean && idf.py build'"
+        else:
+            command=f"bash -c 'export MAKEFLAGS=-j{jobs} && source {self.idf_setup_path} && cd {self._workspace_path} && idf.py build'"
         success2 = await self.call_with_results(
             name="Compile ESP32 firmware",
             target=ShellCommandConfig(
                 name="Compile ESP32 firmware",  
-                command=f"bash -c 'source {self.idf_setup_path} && idf.py all'",                              
+                command=command
             ), 
             logger=build_logger, 
         )
@@ -250,11 +308,13 @@ class FlashApp:
             return False
 
         # Step 3: Flash firmware
+        time.sleep(0.5) # wait for build to finish
+        command = f"bash -c 'source {self.idf_setup_path} && cd {self._workspace_path} && idf.py -p /dev/{port} flash'"
         success3 = await self.call_with_results(
             name=f"Flash firmware to /dev/{port}",
             target=ShellCommandConfig(
                 name=f"Flash firmware to /dev/{port}", 
-                command=f"bash -c 'source {self.idf_setup_path} && idf.py -p /dev/{port} flash'",                               
+                command=command
             ), 
             logger=flash_logger, 
         )
@@ -306,3 +366,54 @@ class FlashApp:
                 ))
 
         return lib_options, example_options 
+
+    @staticmethod
+    def get_optimal_jobs() -> int:
+        """Get optimal number of parallel jobs for idf.py build"""
+        
+        # Get CPU count
+        cpu_count = multiprocessing.cpu_count()
+        
+        # Get available memory (GB)
+        available_memory = psutil.virtual_memory().available / (1024**3)
+        
+        # Calculate optimal jobs based on CPU and memory
+        # ESP32 compilation is memory-intensive
+        if available_memory < 4:
+            # Low memory - be conservative
+            jobs = max(1, cpu_count - 2)
+        elif available_memory < 8:
+            # Medium memory
+            jobs = max(1, cpu_count - 1)
+        else:
+            # High memory - can use more cores
+            jobs = cpu_count
+        
+        # Ensure minimum and maximum bounds
+        jobs = max(1, min(jobs, 16))  # Max 16 jobs
+        
+        return jobs
+
+    def should_fullclean(self, old_config: dict, new_config: dict) -> bool:
+        """Determine if full clean is needed based on config changes"""
+        # TODO: implement this, must thing about original dir and new dir in workspace
+        # # Critical changes that require full rebuild
+        # critical_keys = [
+        #     'CONFIG_IDF_TARGET',           # Target chip change
+        #     'CONFIG_COMPILER_OPTIMIZATION', # Optimization level
+        #     'CONFIG_ESP_SYSTEM_SINGLE_CORE', # Single/dual core
+        #     'CONFIG_FREERTOS_HZ',          # RTOS frequency
+        # ]
+        
+        # # Check if any critical config changed
+        # for key in critical_keys:
+        #     if old_config.get(key) != new_config.get(key):
+        #         return True
+        
+        # # CAN backend changes might need full rebuild
+        # can_backend_keys = [k for k in old_config.keys() if 'CAN_BACKEND' in k]
+        # for key in can_backend_keys:
+        #     if old_config.get(key) != new_config.get(key):
+        #         return True
+        
+        return False

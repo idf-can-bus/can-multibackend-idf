@@ -6,6 +6,8 @@ sdkconfig.*
 *.map
 /.vscode/
 .idea/
+.workspaces
+
 
 # Python
 __pycache__/

@@ -175,12 +175,18 @@ class ShellCommandProcess:
         """Start and wait for completion, return True if successful."""
         try:
             return_code = await self.start()
+
+            if return_code != 0:
+                self.logger.error(f"Process failed with return code: {return_code}")
+                return False
             
             # Check for errors in output even if exit code is 0
-            if return_code == 0 and self._contains_error_in_output():
+            error_in_output, error_line = self._contains_error_in_output()
+            if error_in_output:
+                self.logger.error(f"Process failed with error in output: '{error_line}'")
                 return False
                 
-            return return_code == 0
+            return True
             
         except asyncio.TimeoutError:
             self.logger.error("Process timed out")
@@ -203,7 +209,6 @@ class ShellCommandProcess:
             r"Permission denied",
             r"Device or resource busy",
             r"Connection refused",
-            r"Timeout",
             r"Error:",
             r"Failed:",
             r"Exception:",
@@ -213,15 +218,17 @@ class ShellCommandProcess:
             r"bash:.*: No such file or directory"
         ]
         
+        
         # Check both stdout and stderr for error patterns
         all_output = self.stdout_lines + self.stderr_lines
         
         for line in all_output:
             for pattern in error_patterns:
                 if re.search(pattern, line, re.IGNORECASE):
-                    return True
+                    self.logger.error(f"Error in output line: '{line}' was found with pattern: '{pattern}'")
+                    return True, line
                     
-        return False
+        return False, None
 
     @classmethod
     def terminate_all(cls) -> None:
