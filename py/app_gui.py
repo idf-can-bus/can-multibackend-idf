@@ -211,7 +211,8 @@ class AppGui(App):
                     f"Monitor {port}",  # will be replaced by ShellMonitorLogic
                     id=f"monitor-{port}", 
                     classes="monitor-button",
-                    disabled=not (self.use_fake_monitor or self.real_ports_found)
+                    # Some problems with serial monitors was not solved yet (lines vs. chars output).
+                    disabled=True  # not (self.use_fake_monitor or self.real_ports_found)
                 )
                 self.monitor_logic.register_monitor_button(port, monitor_button)
 
