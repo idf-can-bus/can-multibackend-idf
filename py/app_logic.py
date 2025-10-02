@@ -294,7 +294,7 @@ class FlashApp:
         if should_fullclean:
             command = f"bash -c 'export MAKEFLAGS=-j{jobs} && source {self.idf_setup_path} && cd {self._workspace_path} && idf.py fullclean && idf.py build'"
         else:
-            command=f"bash -c 'export MAKEFLAGS=-j{jobs} && source {self.idf_setup_path} && cd {self._workspace_path} && idf.py build'"
+            command=f"bash -c 'export MAKEFLAGS=-j{jobs} && source {self.idf_setup_path} && cd {self._workspace_path} && idf.py build '"
         success2 = await self.call_with_results(
             name="Compile ESP32 firmware",
             target=ShellCommandConfig(

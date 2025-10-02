@@ -1,0 +1,86 @@
+/* --- Serial Monitors Tab ----------------------------- */
+
+#serial-monitors-tab {
+    layout: horizontal;
+}
+
+#serial-left-panel {
+    width: 20%;
+    border: solid $primary;
+    padding: 1;
+}
+
+#serial-right-panel {
+    width: 1fr;
+    border: solid $primary;
+    margin: 0 1;
+    layout: vertical;
+}
+
+#monitor-table {
+    grid-size: 3;
+    grid-gutter: 0 1;
+    grid-rows: auto;
+    height: auto;
+}
+
+#monitor-table Button {
+    content-align: center middle;
+    text-align: center;
+    height: 3;
+}
+
+.header {
+    text-style: bold;
+    background: $surface;
+    height: 1;
+    content-align: center middle;
+}
+
+.port-name {
+    text-style: bold;
+    padding: 1;
+}
+
+.open-button {
+    background: #4a6b2a;
+    color: white;
+    text-style: bold;
+}
+
+.open-button:hover {
+    background: #6c9245;
+}
+
+.run-button {
+    background: #2a4a6b;
+    color: white;
+    text-style: bold;
+    width: 12;
+}
+
+.run-button:hover {
+    background: #396591;
+}
+
+/* --- monitor containers ----------------------------- */
+
+.monitor-container {
+    border: none;
+    margin: 0 0 0 0;
+    padding: 0;
+}
+
+
+.monitor-title {
+    text-style: bold;
+    background: $surface;
+    height: 1;
+    content-align: center middle;
+    margin: 0 0 0 0;
+}
+
+.serial-logger {
+    height: 1fr;
+    border: solid $accent;
+}

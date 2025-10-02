@@ -1,0 +1,74 @@
+/* --- Build & Flash Tab ----------------------------- */
+
+#build-flash-tab {
+    layout: vertical;
+    padding: 1;
+}
+
+#build-flash-actions { /* toolbar with action buttons */
+    layout: horizontal;
+    height: 3;
+    margin: 1 0 0 0;
+    align: right middle;
+}
+
+#build-flash-actions Button {
+    height: 3;
+    margin: 0 1;
+}
+
+.toolbar-button {
+    background: $surface;
+    color: $text;
+    text-style: bold;
+}
+
+.toolbar-button:hover {
+    background: #444444;
+}
+
+#table {
+    grid-size: 4;
+    grid-gutter: 0 1;
+    grid-rows: auto;
+    height: auto;
+}
+
+.header {
+    text-style: bold;
+    background: $surface;
+    height: 1;
+    content-align: center middle;
+}
+
+#table>* {
+    content-align: center middle;
+}
+
+#table Button {
+    width: 95%;
+    content-align: center middle;
+    text-align: center;
+}
+
+.flash-button {
+    background: #2a6b2a;
+    color: white;
+    text-style: bold;
+    height: 3;
+}
+
+.flash-button:hover {
+    background: #3a7b3a;
+}
+
+.flash-button:disabled {
+    background: grey;
+    text-style: dim;
+}
+
+.flash-button:disabled:hover {
+    background: grey;
+}
+
+
