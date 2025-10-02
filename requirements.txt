@@ -1,0 +1,11 @@
+# ESP32 Flash Manager - Python Dependencies
+
+# Core GUI framework (includes rich as dependency)
+textual==6.1.0
+
+# System utilities
+psutil==7.0.0
+
+# Kconfig parsing
+kconfiglib
+

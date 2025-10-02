@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 __author__ = "Ivo Marvan"
 __email__ = "ivo@marvan.cz"
-__description__ = '''   
+__description__ = '''
 Buffered RichLog widget with timer-based flushing for performance.
 Prevents GUI freezing during high-frequency log output by batching writes.
 Includes emergency flush on errors and async-safe operations.
@@ -12,14 +12,20 @@ import time
 import asyncio
 from typing import Any, Optional
 
+
 class RichLogExtended(RichLog):
     """
     Buffered RichLog with timer-based flushing and performance tracking.
     Accumulates log messages and flushes on buffer full, timer expiry, or emergency conditions.
     Thread-safe with async lock support.
     """
-    def __init__(self, buffer_size: int = 10, flush_interval: float = 0.1, 
-                 *args, **kwargs):
+    def __init__(
+            self,
+            buffer_size: int = 10,
+            flush_interval: float = 0.1,
+            *args,
+            **kwargs
+    ):
         """
         Initialize buffered RichLog.
         
@@ -42,9 +48,15 @@ class RichLogExtended(RichLog):
         self.emergency_flush_count = 0
         self._flush_timer = None
     
-    def write(self, content: Any, width: Optional[int] = None, 
-              expand: bool = False, shrink: bool = True, 
-              scroll_end: Optional[bool] = None, animate: bool = False) -> 'RichLogExtended':
+    def write(
+            self,
+            content: Any,
+            width: Optional[int] = None,
+            expand: bool = False,
+            shrink: bool = True,
+            scroll_end: Optional[bool] = None,
+            animate: bool = False
+    ) -> 'RichLogExtended':
         """
         Buffer write with timer-based flushing.
         Flushes immediately on error messages or buffer full.

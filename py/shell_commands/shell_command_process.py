@@ -60,7 +60,7 @@ class ShellCommandProcess:
                     self._read_stream(self.process.stderr, self.stderr_lines)
                 ),
                 timeout=300
-            )            
+            )
             
             self.running = False
             ShellCommandProcess._instances.discard(self)
@@ -86,23 +86,23 @@ class ShellCommandProcess:
             Text with Rich markup tags
         """
         ansi_to_rich = {
-            '[0;30m': '[black]',      # Black
-            '[0;31m': '[red]',        # Red
-            '[0;32m': '[green]',      # Green
-            '[0;33m': '[yellow]',     # Yellow
-            '[0;34m': '[blue]',       # Blue
-            '[0;35m': '[magenta]',    # Magenta
-            '[0;36m': '[cyan]',       # Cyan
-            '[0;37m': '[white]',      # White
-            '[1;30m': '[bold black]', # Bold Black
-            '[1;31m': '[bold red]',   # Bold Red
-            '[1;32m': '[bold green]', # Bold Green
-            '[1;33m': '[bold yellow]',# Bold Yellow
-            '[1;34m': '[bold blue]',  # Bold Blue
-            '[1;35m': '[bold magenta]',# Bold Magenta
-            '[1;36m': '[bold cyan]',  # Bold Cyan
-            '[1;37m': '[bold white]', # Bold White
-            '[0m': '[/]',             # Reset
+            '[0;30m': '[black]',        # Black
+            '[0;31m': '[red]',          # Red
+            '[0;32m': '[green]',        # Green
+            '[0;33m': '[yellow]',       # Yellow
+            '[0;34m': '[blue]',         # Blue
+            '[0;35m': '[magenta]',      # Magenta
+            '[0;36m': '[cyan]',         # Cyan
+            '[0;37m': '[white]',        # White
+            '[1;30m': '[bold black]',   # Bold Black
+            '[1;31m': '[bold red]',     # Bold Red
+            '[1;32m': '[bold green]',   # Bold Green
+            '[1;33m': '[bold yellow]',  # Bold Yellow
+            '[1;34m': '[bold blue]',    # Bold Blue
+            '[1;35m': '[bold magenta]',  # Bold Magenta
+            '[1;36m': '[bold cyan]',    # Bold Cyan
+            '[1;37m': '[bold white]',   # Bold White
+            '[0m': '[/]',               # Reset
             '[1m': '[bold]',
             '[22m': '[/bold]',
         }
@@ -141,7 +141,6 @@ class ShellCommandProcess:
                 self.logger.info(rich_line)
             except MarkupError as e:
                 self.logger.info(decoded_line)
-            
 
     def pause_output(self) -> None:
         """Pause output streaming (output continues to be captured)."""
@@ -242,4 +241,3 @@ class ShellCommandProcess:
             List of active ShellCommandProcess instances
         """
         return [p for p in cls._instances if p.is_running()]
-

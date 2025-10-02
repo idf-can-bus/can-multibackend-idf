@@ -16,6 +16,7 @@ from py.log.rich_log_handler import LogSource, RichLogHandler
 
 reconfig_logger = RichLogHandler.get_logger(LogSource.RECONFIG)
 
+
 @dataclass
 class SdkconfigLine:
     """
@@ -153,4 +154,4 @@ class Sdkconfig:
         except Exception as e:
             reconfig_logger.error(f"Error writing sdkconfig: {e}")
             import traceback
-            reconfig_logger.debug(traceback.format_exc()) 
+            reconfig_logger.debug(traceback.format_exc())

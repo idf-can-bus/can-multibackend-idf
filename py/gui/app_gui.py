@@ -7,6 +7,7 @@ Provides interactive interface for selecting libraries, examples, and flashing E
 Features real-time compilation output, port detection, and dependency validation.
 '''
 
+import asyncio
 import logging
 import os
 import time
@@ -27,11 +28,12 @@ logging.basicConfig(
     format='%(message)s',
 )
 
+
 class AppGui(App):
     CSS_PATH = ["css/app.css", "css/build_flash_tab.css", "css/serial_monitor_tab.css"]
     
     BINDINGS = [
-        ("ctrl+q", "quit", "Quit"),        
+        ("ctrl+q", "quit", "Quit"),
     ]
 
     ports = reactive(list)
@@ -88,7 +90,7 @@ class AppGui(App):
     def compose(self) -> ComposeResult:
         with TabbedContent():
             with TabPane("Build & Flash"):
-                yield BuildFlashTab(                    
+                yield BuildFlashTab(
                     logic=self.logic, 
                     gui_app=self,
                     ports=self.ports, 
@@ -96,7 +98,9 @@ class AppGui(App):
                     debug=self._debug
                 )
             with TabPane("Serial Monitors"):
-                yield SerialMonitorsTab(self.ports, python_logger, self.monitor_logic, max_log_lines=500)
+                yield SerialMonitorsTab(
+                    self.ports, python_logger, self.monitor_logic, max_log_lines=500
+                )
 
         yield Footer()
 
@@ -117,5 +121,4 @@ class AppGui(App):
         except Exception as e:
             python_logger.error(f"Error stopping monitor processes: {e}")
         finally:
-            time.sleep(1)
             self.exit()

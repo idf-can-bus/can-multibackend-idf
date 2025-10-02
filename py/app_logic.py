@@ -10,11 +10,11 @@ Manages the complete workflow from Kconfig parsing to ESP32 flashing.
 
 import glob
 import re
-from typing import List, Optional, Type, Any
+from typing import List, Optional, Type, Any, Tuple
 import traceback
 import os
 import shutil
-import time 
+import time
 import multiprocessing
 import psutil
 
@@ -27,6 +27,7 @@ config_logger = RichLogHandler.get_logger(LogSource.CONFIG)
 reconfig_logger = RichLogHandler.get_logger(LogSource.RECONFIG)
 build_logger = RichLogHandler.get_logger(LogSource.BUILD)
 flash_logger = RichLogHandler.get_logger(LogSource.FLASH)
+
 
 class FlashApp:
     """
@@ -115,13 +116,19 @@ class FlashApp:
             config_logger.debug(f"{prompt_char} No dependencies required - compatible")
             return True
         if lib_option.id in example_option.depends_on:
-            config_logger.debug(f"{prompt_char} {lib_option.id} found in dependencies {example_option.depends_on} -> OK")
+            config_logger.debug(
+                f"{prompt_char} {lib_option.id} found in dependencies "
+                f"{example_option.depends_on} -> OK"
+            )
             return True
         else:
-            config_logger.debug(f"{prompt_char} {lib_option.id} NOT found in dependencies {example_option.depends_on} -> FAIL")
+            config_logger.debug(
+                f"{prompt_char} {lib_option.id} NOT found in dependencies "
+                f"{example_option.depends_on} -> FAIL"
+            )
             return False
 
-    def _switch_to_workspace(self, lib_id: str, example_id: str ):
+    def _switch_to_workspace(self, lib_id: str, example_id: str):
         """
         Switch to isolated workspace directory for lib/example combination.
         Creates symbolic links to source directories and copies sdkconfig if needed.
@@ -143,7 +150,7 @@ class FlashApp:
         workspace_dir = os.path.realpath(os.path.expanduser(workspace_dir))
         if not os.path.exists(workspace_dir):
             os.makedirs(workspace_dir)
-        link_list = [x for x in os.listdir(".") if os.path.isdir(x) and x!='build' and (not x.startswith('.'))]
+        link_list = [x for x in os.listdir(".") if os.path.isdir(x) and x != 'build' and (not x.startswith('.'))]
         link_list.append("CMakeLists.txt")
         for item in link_list:
             abs_old_path = os.path.abspath(f"./{item}")
@@ -157,8 +164,7 @@ class FlashApp:
         reconfig_logger.info(f"Switched to workspace: {workspace_dir}")
         return True
 
-
-    def _update_sdkconfig(self, lib_id: str, example_id: str ):
+    def _update_sdkconfig(self, lib_id: str, example_id: str):
         """
         Update sdkconfig file based on selected library and example.
         Enables selected options and disables all others.
@@ -185,7 +191,6 @@ class FlashApp:
                     config_logger.debug(f"Config {config_id} not found in sdkconfig")
             changes_made = 0
             for config_id, line in relevant_lines.items():
-                new_value = None
                 if config_id == lib_id:
                     new_value = 'y'
                     reconfig_logger.info(f"ENABLE: {config_id} (selected lib)")
@@ -213,7 +218,6 @@ class FlashApp:
             config_logger.error(f"Failed to update sdkconfig: {e}")
             config_logger.info(traceback.format_exc())
             return False
-
 
     async def call_with_results(
         self, target: ShellCommandConfig | Type[Any], 
@@ -262,7 +266,6 @@ class FlashApp:
             logger.error(f"!!! {name} failed ❌: {e} !!!")
             logger.info(traceback.format_exc())
             return False
-        
 
     async def config_compile_flash(self, port: str, lib_id: str, example_id: str) -> bool:
         """
@@ -299,9 +302,19 @@ class FlashApp:
         jobs = self.get_optimal_jobs()
         should_fullclean = self.should_fullclean(None, None)
         if should_fullclean:
-            command = f"bash -c 'export MAKEFLAGS=-j{jobs} && source {self.idf_setup_path} && cd {self._workspace_path} && idf.py fullclean && idf.py build'"
+            command = (
+                f"bash -c 'export MAKEFLAGS=-j{jobs} && "
+                f"source {self.idf_setup_path} && "
+                f"cd {self._workspace_path} && "
+                f"idf.py fullclean && idf.py build'"
+            )
         else:
-            command=f"bash -c 'export MAKEFLAGS=-j{jobs} && source {self.idf_setup_path} && cd {self._workspace_path} && idf.py build '"
+            command = (
+                f"bash -c 'export MAKEFLAGS=-j{jobs} && "
+                f"source {self.idf_setup_path} && "
+                f"cd {self._workspace_path} && "
+                f"idf.py build'"
+            )
         success2 = await self.call_with_results(
             name="Compile ESP32 firmware",
             target=ShellCommandConfig(
@@ -325,7 +338,7 @@ class FlashApp:
         )
         return success3
 
-    def find_flash_ports(self, default_ports: list[str] = ['Port1', 'Port2', 'Port3', 'Port4']) -> tuple[list[str], bool]:
+    def find_flash_ports(self, default_ports: List[str] = None) -> Tuple[List[str], bool]:
         """
         Detect available ESP32 serial ports.
         
@@ -335,6 +348,8 @@ class FlashApp:
         Returns:
             Tuple of (port_list, real_ports_found_flag)
         """
+        if default_ports is None:
+            default_ports = ['Port1', 'Port2', 'Port3', 'Port4']
         real_ports_found = False
         ports = glob.glob('/dev/ttyACM*')
         flash_ports1 = sorted(p[5:] for p in ports if re.match(r'/dev/ttyACM\d+$', p))
@@ -399,7 +414,7 @@ class FlashApp:
         
         return jobs
 
-    def should_fullclean(self, old_config: dict, new_config: dict) -> bool:
+    def should_fullclean(self, old_config: dict = None, new_config: dict = None) -> bool:
         """
         Determine if full clean build is needed.
         Currently always returns False - incremental builds only.

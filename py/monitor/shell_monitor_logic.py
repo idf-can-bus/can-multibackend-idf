@@ -21,7 +21,14 @@ class PortMonitorProcess:
     Bypasses standard logging for real-time output display without GUI blocking.
     """
     
-    def __init__(self, config: ShellCommandConfig, port_log_widget, read_timeout: float = 0.01, write_timeout: float = 0.01, buffer_size: int = 50):
+    def __init__(
+            self,
+            config: ShellCommandConfig,
+            port_log_widget,
+            read_timeout: float = 0.01,
+            write_timeout: float = 0.01,
+            buffer_size: int = 50
+    ):
         """
         Initialize monitor process.
         

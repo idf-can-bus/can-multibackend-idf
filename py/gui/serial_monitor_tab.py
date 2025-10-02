@@ -21,7 +21,13 @@ class SerialMonitorsTab(Container):
     Right panel: log outputs for each monitored port.
     Supports multiple concurrent monitors with automatic height distribution.
     """
-    def __init__(self, ports, python_logger: RichLogHandler, monitor_logic:ShellMonitorLogic, max_log_lines:int = 500) -> None:
+    def __init__(
+            self,
+            ports,
+            python_logger: RichLogHandler,
+            monitor_logic: ShellMonitorLogic,
+            max_log_lines: int = 500
+    ) -> None:
         super().__init__(id="serial-monitors-tab")
         self.ports = ports
         self.python_logger = python_logger
@@ -52,7 +58,7 @@ class SerialMonitorsTab(Container):
             yield Static("Monitor Output - monitors will appear here", id="monitor-placeholder")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if  event.button.id and event.button.id.startswith("open-"):
+        if event.button.id and event.button.id.startswith("open-"):
             self._on_open_pressed(event)
         elif event.button.id and event.button.id.startswith("run-"):
             self._on_run_pressed(event)

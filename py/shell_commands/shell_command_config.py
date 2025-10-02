@@ -7,6 +7,7 @@ Configuration dataclass for shell command execution.
 Stores command name and shell command string for subprocess execution.
 '''
 
+
 class ShellCommandConfig:
     """
     Configuration container for shell command execution.
@@ -22,4 +23,3 @@ class ShellCommandConfig:
         """
         self.name = name or command
         self.command = command
-        

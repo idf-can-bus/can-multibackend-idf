@@ -14,6 +14,7 @@ from enum import Enum
 from textual.widgets import RichLog
 from py.log.rich_log_extended import RichLogExtended
 
+
 class LogSource(Enum):
     """
     Log source enumeration with emoji identifiers.
@@ -91,14 +92,19 @@ class RichLogHandler(logging.Handler):
             handler = RichLogHandler(source, display_name)
             logger_name = f"{source.display_name}.{display_name}" if display_name else source.display_name
             logger = logging.getLogger(logger_name)
-            for h in logger.handlers[:]:  
+            for h in logger.handlers[:]:
                 logger.removeHandler(h)
             logger.addHandler(handler)
             logger.propagate = False
-            cls.registered_loggers[logger_key] = logger   
+            cls.registered_loggers[logger_key] = logger
             return logger
 
-    def __init__(self, source: LogSource = LogSource.PYTHON, display_name: str = None, extra_color: str = None):
+    def __init__(
+            self,
+            source: LogSource = LogSource.PYTHON,
+            display_name: str = None,
+            extra_color: str = None
+    ):
         """
         Initialize logging handler.
         

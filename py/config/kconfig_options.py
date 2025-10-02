@@ -19,6 +19,7 @@ from py.log.rich_log_handler import LogSource, RichLogHandler
 
 logger = RichLogHandler.get_logger(LogSource.CONFIG)
 
+
 @dataclass
 class ConfigOption:
     """
@@ -31,9 +32,11 @@ class ConfigOption:
     depends_on: Optional[List[str]] = None
 
     def __str__(self):
-        return f"id: {self.id} display_name: {self.display_name} " \
-               f"config_type: {self.config_type} " \
-               f"depends_on: {self.depends_on}"
+        return (
+            f"id: {self.id} display_name: {self.display_name} "
+            f"config_type: {self.config_type} "
+            f"depends_on: {self.depends_on}"
+        )
 
 
 class KconfigMenuItems:
@@ -178,4 +181,4 @@ class KconfigMenuItems:
         for menu_name, options in self._menus_dict.items():
             for option_id, option in options.items():
                 flat_dict[option_id] = option
-        return flat_dict 
+        return flat_dict

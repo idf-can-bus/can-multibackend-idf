@@ -27,6 +27,7 @@ import logging
 # Import our modules
 from py.gui.app_gui import AppGui
 
+
 def main(logging_level):
     parser = argparse.ArgumentParser(description="ESP32 Flash Tool")
     parser.add_argument('-k', '--kconfig',
@@ -35,9 +36,11 @@ def main(logging_level):
     parser.add_argument('-s', '--sdkconfig',
                         default="./sdkconfig",
                         help="Path to sdkconfig file (default: ./sdkconfig)")
-    parser.add_argument('-i', '--idf_setup',
-                        default="~/esp/v5.4.1/esp-idf/export.sh",
-                        help="Path to script for preparing idf.py enviroment (default: ~/esp/v5.4.1/esp-idf/export.sh)")
+    parser.add_argument(
+        '-i', '--idf_setup',
+        default="~/esp/v5.4.1/esp-idf/export.sh",
+        help="Path to script for preparing idf.py enviroment (default: ~/esp/v5.4.1/esp-idf/export.sh)"
+    )
 
     parser.add_argument('-v', '--verbose',
                         action='store_true',
@@ -46,7 +49,6 @@ def main(logging_level):
     parser.add_argument('-d', '--debug',
                         action='store_true',
                         help="Enable debug mode")
-    
 
     args = parser.parse_args()
 
