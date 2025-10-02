@@ -76,7 +76,10 @@ class AppGui(App):
         
         # Create monitor GUI logic instance
         self.monitor_logic = ShellMonitorLogic(
-            idf_setup_path=idf_setup_path
+            idf_setup_path=idf_setup_path,
+            read_timeout=0.01,
+            write_timeout=0.01,
+            buffer_size=0  # 0 = immediate output, no buffering
         )
 
         # Initialize ports

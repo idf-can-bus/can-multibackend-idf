@@ -11,26 +11,26 @@ Supports both real serial ports and fake monitoring for testing.
 import os
 import asyncio
 from typing import Dict
-from py.shell_commands import ShellCommandConfig, ShellCommandProcess
-from py.log.rich_log_handler import LogSource, RichLogHandler
+from py.shell_commands import ShellCommandConfig
 
 
 class PortMonitorProcess:
     """
-    Custom shell command process that writes directly to RichLog for port monitoring.
+    Custom shell command process that writes directly to log for port monitoring.
     This bypasses the normal logger mechanism for direct output streaming.
     Streams output character by character to avoid blocking GUI.
     """
     
-    def __init__(self, config: ShellCommandConfig, port_log_widget, read_timeout: float = 0.01, write_timeout: float = 0.01):
+    def __init__(self, config: ShellCommandConfig, port_log_widget, read_timeout: float = 0.01, write_timeout: float = 0.01, buffer_size: int = 50):
         """
-        Initialize monitor process with direct RichLog output.
+        Initialize monitor process with direct output.
         
         Args:
             config: Shell command configuration
-            port_log_widget: RichLog widget to write output to
+            port_log_widget:  widget to write output to
             read_timeout: Timeout for reading from subprocess (seconds)
-            write_timeout: Timeout for writing to RichLog (seconds)
+            write_timeout: Timeout for writing to (seconds)
+            buffer_size: Buffer size for output (0 = immediate output, no buffering)
         """
         self.config = config
         self.port_log_widget = port_log_widget
@@ -38,6 +38,7 @@ class PortMonitorProcess:
         self.running = False
         self.read_timeout = read_timeout
         self.write_timeout = write_timeout
+        self.buffer_size = buffer_size
         
         # Buffer for accumulating characters
         self.stdout_buffer = ""
@@ -87,7 +88,14 @@ class PortMonitorProcess:
                         buffer += char
                         
                         # Write buffer when we hit newline or buffer gets too long
-                        if char == '\n' or len(buffer) >= 50:
+                        # If buffer_size is 0, write immediately for each character
+                        should_write = (
+                            char == '\n' or 
+                            (self.buffer_size > 0 and len(buffer) >= self.buffer_size) or
+                            (self.buffer_size == 0)
+                        )
+                        
+                        if should_write:
                             await asyncio.wait_for(
                                 asyncio.to_thread(self._write_to_textarea, f"{prefix}{buffer}"),
                                 timeout=self.write_timeout
@@ -143,12 +151,16 @@ class ShellMonitorLogic:
     Provides serial port streaming for GUI.
     Supports both real serial ports and fake monitoring for testing.
     """
+    BAUD_RATE = 115200  # Default baud rate for ESP-IDF monitors
+    PORT_PARAMS = 'raw -echo -ixon -ixoff -crtscts'
+
     
     def __init__(
         self, 
         idf_setup_path: str = "~/esp/v5.4.1/esp-idf/export.sh",
         read_timeout: float = 0.01,
-        write_timeout: float = 0.01
+        write_timeout: float = 0.01,
+        buffer_size: int = 50
     ):
         """
         Initialize monitor logic.
@@ -157,10 +169,12 @@ class ShellMonitorLogic:
             idf_setup_path: Path to ESP-IDF setup script
             read_timeout: Timeout for reading from subprocess (seconds)
             write_timeout: Timeout for writing to RichLog (seconds)
+            buffer_size: Buffer size for output (0 = immediate output, no buffering)
         """
         self.idf_setup_path = os.path.expanduser(idf_setup_path)
         self.read_timeout = read_timeout
         self.write_timeout = write_timeout
+        self.buffer_size = buffer_size
         
         # Active monitor processes - key: port, value: PortMonitorProcess
         self.active_monitors: Dict[str, PortMonitorProcess] = {}
@@ -203,7 +217,8 @@ class ShellMonitorLogic:
             config=config, 
             port_log_widget=monitor_log_widget,
             read_timeout=self.read_timeout,
-            write_timeout=self.write_timeout
+            write_timeout=self.write_timeout,
+            buffer_size=self.buffer_size
         )
         
         # Store process
@@ -271,8 +286,9 @@ class ShellMonitorLogic:
         
     def _create_real_monitor_command(self, port: str) -> str:
         """Create real serial monitor command using idf.py monitor."""
-        return f"bash -c 'source {self.idf_setup_path} && idf.py -p /dev/{port} monitor'"
-        
+        # replace old version: f"bash -c 'source {self.idf_setup_path} && idf.py -p /dev/{port} monitor'"
+        return f'stty -F /dev/{port} {self.BAUD_RATE} {self.PORT_PARAMS} && cat /dev/{port}'
+
     async def run_monitor_with_cleanup(self, port: str) -> bool:
         """
         Run monitor process and handle cleanup when it finishes.
