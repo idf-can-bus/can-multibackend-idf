@@ -209,7 +209,7 @@ void process_received_message(can_message_t *message, const bool print_during_re
             printf("\n");
             // Print stats in a single log line to minimize blocking time and reduce RX overruns
             ESP_LOGI(TAG,
-                     "Sequence stats: frames=%llu in_order=%llu lost=%llu dup=%llu elapsed=%.1f ms rx=%.1f Hz",
+                     "Sequence stats: frames=%llu in_order=%llu lost=%llu dup=%llu elapsed=%.1f ms f=%.1f Hz",
                      seq_rx_count,
                      seq_ok_in_order,
                      seq_lost,
