@@ -3,6 +3,8 @@
 #include "esp_timer.h"
 #include "esp_log.h"
 #include "examples_utils.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #define TAG "EXAMPLES_UTILS"
 
@@ -205,13 +207,15 @@ void process_received_message(can_message_t *message, const bool print_during_re
                 rx_rate_hz = (float)seq_rx_count / (elapsed_time_ms / 1000.0f);
             }
             printf("\n");
-            ESP_LOGI(TAG, "Sequence stats (since last END_TAG):");
-            ESP_LOGI(TAG, "  payload->heartbeat frames: %llu", seq_rx_count);
-            ESP_LOGI(TAG, "  in-order frames: %llu", seq_ok_in_order);
-            ESP_LOGI(TAG, "  estimated lost: %llu", seq_lost);
-            ESP_LOGI(TAG, "  out-of-order/dup: %llu", seq_out_of_order_or_dup);
-            ESP_LOGI(TAG, "  elapsed time: %.1f ms", elapsed_time_ms);
-            ESP_LOGI(TAG, "  rx rate: %.1f Hz", rx_rate_hz);
+            // Print stats in a single log line to minimize blocking time and reduce RX overruns
+            ESP_LOGI(TAG,
+                     "Sequence stats: frames=%llu in_order=%llu lost=%llu dup=%llu elapsed=%.1f ms rx=%.1f Hz",
+                     seq_rx_count,
+                     seq_ok_in_order,
+                     seq_lost,
+                     seq_out_of_order_or_dup,
+                     elapsed_time_ms,
+                     rx_rate_hz);
             
             // Reset sequence statistics window
             seq_rx_count = 0;
@@ -229,4 +233,13 @@ void debug_send_message(can_message_t *message, const bool print_during_send) {
         return;
     }
     log_message(true, message, print_during_send);
+}
+
+void sleep_ms_min_ticks(uint32_t ms)
+{
+    TickType_t ticks = pdMS_TO_TICKS(ms);
+    if (ticks == 0) {
+        ticks = 1;
+    }
+    vTaskDelay(ticks);
 }

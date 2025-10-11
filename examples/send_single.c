@@ -1,9 +1,5 @@
 #include "can_dispatch.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include <stdio.h>
 #include "esp_log.h"
-#include "can_dispatch.h"
 #include "examples_utils.h"
 #include "init_hardware.h"
 
@@ -60,6 +56,6 @@ void app_main(void)
         sender_id = (index % max_index == 0) ? END_TAG_ID : SENDER_ID_1;
 
         // wait for send interval
-        vTaskDelay(pdMS_TO_TICKS(send_interval_ms));
+        sleep_ms_min_ticks(send_interval_ms);
     }
 }

@@ -1,26 +1,14 @@
 #include "can_dispatch.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include <stdio.h>
 #include "esp_log.h"
-#include "can_dispatch.h"
 #include "examples_utils.h"
 #include "init_hardware.h"
-#include "esp_task_wdt.h"
 
 static const char *TAG = "receive_poll_single";
 
 
 void app_main(void)
 {
-    // Konfigurace watchdog timeru
-    esp_task_wdt_config_t wdt_config = {
-        .timeout_ms = 5000,           // 5 sekund timeout
-        .idle_core_mask = (1 << 0),   // Sledovat idle task na CPU 0
-        .trigger_panic = true         // Spustit panic handler při timeoutu
-    };
-    esp_task_wdt_init(&wdt_config);
-    esp_task_wdt_add(NULL);      // Přidání hlavního tasku do WDT
+    // WDT is managed by system defaults; this example does not reconfigure it.
 
     // --- init hardware ----------------------------------------------------------------------------
     can_config_t hw_config;
@@ -49,11 +37,8 @@ void app_main(void)
         {
             process_received_message(&message, print_during_send);
         }
-        
-        // feed watchdog
-        esp_task_wdt_reset();
 
         // wait a while
-        vTaskDelay(pdMS_TO_TICKS(receive_interval_ms));
+        sleep_ms_min_ticks(receive_interval_ms);
     }
 }

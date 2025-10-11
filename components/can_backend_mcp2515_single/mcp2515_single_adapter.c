@@ -175,14 +175,20 @@ if (err != ESP_OK) {
 
     // Step 6: Switch to normal mode or loopback mode with detailed diagnostics
     CANCTRL_REQOP_MODE_t target_mode;
+    #if MCP2515_ADAPTER_DEBUG
     const char* mode_name;
+    #endif
 
     if (cfg->use_loopback) {
         target_mode = CANCTRL_REQOP_LOOPBACK;
+        #if MCP2515_ADAPTER_DEBUG
         mode_name = "loopback";
+        #endif
     } else {
         target_mode = CANCTRL_REQOP_NORMAL;
+        #if MCP2515_ADAPTER_DEBUG
         mode_name = "normal";
+        #endif
     }
 
     #if MCP2515_ADAPTER_DEBUG
@@ -192,9 +198,9 @@ if (err != ESP_OK) {
     #endif
 
     // Read current state BEFORE attempting change
+    #if MCP2515_ADAPTER_DEBUG
     uint8_t canstat_before = MCP2515_readRegister(MCP_CANSTAT);
     uint8_t canctrl_before = MCP2515_readRegister(MCP_CANCTRL);
-    #if MCP2515_ADAPTER_DEBUG
     if (cfg->enable_debug_spi) {
         ESP_LOGI(TAG, "BEFORE: CANSTAT=0x%02X (mode=%d), CANCTRL=0x%02X",
                  canstat_before, (canstat_before >> 5) & 0x07, canctrl_before);
@@ -209,11 +215,11 @@ if (err != ESP_OK) {
     bool mode_ok = false;
     for (int attempt = 0; attempt < 10; attempt++) {
         uint8_t canstat = MCP2515_readRegister(MCP_CANSTAT);
-        uint8_t canctrl = MCP2515_readRegister(MCP_CANCTRL);
         uint8_t current_mode = (canstat >> 5) & 0x07;
         uint8_t requested_mode = (target_mode >> 5) & 0x07;
 
         #if MCP2515_ADAPTER_DEBUG
+        uint8_t canctrl = MCP2515_readRegister(MCP_CANCTRL);
         if (cfg->enable_debug_spi) {
             ESP_LOGI(TAG, "  Attempt %d: CANSTAT=0x%02X (mode=%d), CANCTRL=0x%02X (want mode=%d)",
                      attempt, canstat, current_mode, canctrl, requested_mode);
@@ -241,12 +247,12 @@ if (err != ESP_OK) {
         #endif
 
         // Read all relevant registers for debugging
+        #if MCP2515_ADAPTER_DEBUG
         uint8_t canstat = MCP2515_readRegister(MCP_CANSTAT);
         uint8_t canctrl = MCP2515_readRegister(MCP_CANCTRL);
         uint8_t cnf1 = MCP2515_readRegister(MCP_CNF1);
         uint8_t cnf2 = MCP2515_readRegister(MCP_CNF2);
         uint8_t cnf3 = MCP2515_readRegister(MCP_CNF3);
-        #if MCP2515_ADAPTER_DEBUG
         if (cfg->enable_debug_spi) {
             ESP_LOGE(TAG, "Final registers:");
             ESP_LOGE(TAG, "  CANSTAT: 0x%02X (mode=%d)", canstat, (canstat >> 5) & 0x07);
@@ -281,7 +287,8 @@ if (err != ESP_OK) {
     }
     
     // Step 7: Configure interrupts and filters
-    MCP2515_setRegister(MCP_CANINTE, CANINTF_RX0IF | CANINTF_RX1IF | CANINTF_ERRIF | CANINTF_MERRF);
+    // Enable RXnIF and ERRIF; do not enable MERRF to reduce spurious error interrupts on heavy traffic
+    MCP2515_setRegister(MCP_CANINTE, CANINTF_RX0IF | CANINTF_RX1IF | CANINTF_ERRIF);
     
     // Configure filters to accept all messages
     const RXF_t filters[] = {RXF0, RXF1, RXF2, RXF3, RXF4, RXF5};
@@ -467,7 +474,15 @@ bool mcp2515_single_receive(can_message_t *raw_in_msg) {
     if (MCP2515_checkError()) {
         uint8_t eflg = MCP2515_getErrorFlags();
         ESP_LOGE(TAG, "MCP2515 error flags: 0x%02x", eflg);
-        MCP2515_clearERRIF();
+        // Handle RX buffer overrun explicitly: clear EFLG RXnOVR and related interrupts
+        if (eflg & (EFLG_RX0OVR | EFLG_RX1OVR)) {
+            MCP2515_clearRXnOVR();
+        } else {
+            // Clear generic error interrupt flag
+            MCP2515_clearERRIF();
+        }
+        // Ensure we don't remain stuck thinking an interrupt is pending
+        interrupt_pending = false;
         return false;
     }
     
@@ -475,6 +490,9 @@ bool mcp2515_single_receive(can_message_t *raw_in_msg) {
     ERROR_t ret = MCP2515_readMessageAfterStatCheck(frame);
     if (ret != ERROR_OK) {
         ESP_LOGE(TAG, "Failed to read message: %d", ret);
+        // Clear spurious interrupt flags to avoid IRQ storm
+        MCP2515_clearInterrupts();
+        interrupt_pending = false;
         return false;
     }
     
@@ -487,7 +505,15 @@ bool mcp2515_single_receive(can_message_t *raw_in_msg) {
     raw_in_msg->dlc = frame[0].can_dlc;
     memcpy(raw_in_msg->data, frame[0].data, frame[0].can_dlc);
     
-    interrupt_pending = false;  // Reset interrupt flag after successful read
+    // Drain any remaining RX frames to prevent RXnOVR under burst logging or delays
+    while (MCP2515_checkReceive()) {
+        CAN_FRAME_t drain;
+        if (MCP2515_readMessageAfterStatCheck(drain) != ERROR_OK) {
+            break;
+        }
+    }
+
+    interrupt_pending = false;  // Reset interrupt flag after successful read and drain
     return true;
 }
 

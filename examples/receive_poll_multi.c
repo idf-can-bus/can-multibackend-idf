@@ -1,7 +1,6 @@
 #include "can_dispatch.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include <stdio.h>
+#include "examples_utils.h"
 
 void app_main(void)
 {
@@ -11,6 +10,6 @@ void app_main(void)
     while (1) {
         can_iface_transmit(data, 8);
         printf("frame sent\n");
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        sleep_ms_min_ticks(1000);
     }
 }

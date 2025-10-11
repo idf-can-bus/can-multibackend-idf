@@ -80,6 +80,9 @@ void debug_send_message(can_message_t *message, const bool print_during_send);
 // log message in a example 
 void log_message(const bool send, can_message_t *message, const bool print_details);
 
+// Sleep for given milliseconds ensuring at least one RTOS tick is waited
+void sleep_ms_min_ticks(uint32_t ms);
+
 // --- enumerate senders ---------------------------------------------------------------------------
 typedef enum {
     SENDER_ID_1 = 1,
