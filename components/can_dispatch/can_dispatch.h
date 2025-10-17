@@ -32,7 +32,7 @@ extern "C" {
     typedef mcp2515_single_config_t can_config_t;
 #elif CONFIG_CAN_BACKEND_MCP2515_MULTI
     /* call multi-MCP backend */
-    typedef mcp2515_single_config_t can_config_t;  // Use same config for now
+    typedef mcp_multi_instance_cfg_t can_config_t;
 #elif CONFIG_CAN_BACKEND_ARDUINO
     /* call Arduino backend */
     // TODO: Define Arduino config type

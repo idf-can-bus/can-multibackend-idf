@@ -108,7 +108,7 @@ void app_main(void)
 #if CONFIG_CAN_BACKEND_TWAI
     ESP_LOGI(TAG, "Receiver interrupt-driven, single controller, TWAI");
 #else
-    ESP_LOGI(TAG, "Receiver interrupt-driven, single controller, MCP2515");
+    ESP_LOGI(TAG, "Receiver interrupt-driven, controller, MCP2515");
 #endif
 
     // --- start tasks ------------------------------------------------------------------------------

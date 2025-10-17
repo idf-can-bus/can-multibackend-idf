@@ -27,7 +27,7 @@ void app_main(void)
 
 
     // identify your self as receiver   
-    ESP_LOGI(TAG, "Receiver pool, single controller");
+    ESP_LOGI(TAG, "Receiver pool");
 
     while (1)
     {

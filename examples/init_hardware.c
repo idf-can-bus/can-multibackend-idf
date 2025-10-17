@@ -1,17 +1,24 @@
 #include "driver/twai.h"
 #include "driver/gpio.h"
 #include "init_hardware.h"
+#include "esp_log.h"
+#if CONFIG_CAN_BACKEND_MCP2515_SINGLE
 #include "mcp2515-esp32-idf/mcp2515.h"
+#endif
+#if CONFIG_CAN_BACKEND_MCP2515_MULTI
+#include "mcp2515_multi_adapter.h"
+#endif
 
 // Compile-time switch for SPI/link diagnostics in MCP2515 adapter
 #ifndef MCP2515_ADAPTER_DEBUG
-#define MCP2515_ADAPTER_DEBUG 0
+#define MCP2515_ADAPTER_DEBUG 1
 #endif
 
 void init_hardware(can_config_t *hw_config_ptr)
 {
 #if CONFIG_CAN_BACKEND_TWAI
     // init TWAI controller
+    ESP_LOGI("init_hardware", "Adapter: TWAI (builtin)");
     static const gpio_num_t TX_GPIO = GPIO_NUM_39;
     static const gpio_num_t RX_GPIO = GPIO_NUM_40;
     static const uint32_t TX_QUEUE_LEN = 20;
@@ -41,6 +48,7 @@ void init_hardware(can_config_t *hw_config_ptr)
     };
 
 #elif CONFIG_CAN_BACKEND_MCP2515_SINGLE
+    ESP_LOGI("init_hardware", "Adapter: MCP2515_SINGLE");
     // init MCP2515 controller
     static const gpio_num_t MISO_GPIO = GPIO_NUM_37;  // SPI MISO
     static const gpio_num_t MOSI_GPIO = GPIO_NUM_38;  // SPI MOSI
@@ -82,7 +90,31 @@ void init_hardware(can_config_t *hw_config_ptr)
     };
 
 #elif CONFIG_CAN_BACKEND_MCP2515_MULTI 
-    // init multi-MCP controller
+    ESP_LOGI("init_hardware", "Adapter: MCP2515_MULTI (single-instance test)");
+    // Prepare configuration for one instance; actual init is done in canif_init()
+    *hw_config_ptr = (can_config_t){
+        .host = SPI2_HOST,
+        .bus_cfg = {
+            .miso_io_num = GPIO_NUM_37,
+            .mosi_io_num = GPIO_NUM_38,
+            .sclk_io_num = GPIO_NUM_36,
+            .quadwp_io_num = -1,
+            .quadhd_io_num = -1,
+        },
+        .dev_cfg = {
+            .mode = 0,
+            .clock_speed_hz = 10000000,
+            .spics_io_num = GPIO_NUM_33,
+            .queue_size = 64,
+            .flags = 0,
+            .command_bits = 0,
+            .address_bits = 0,
+            .dummy_bits = 0,
+        },
+        .int_gpio = GPIO_NUM_34,
+        .can_speed = CAN_1000KBPS,
+        .can_clock = MCP_16MHZ,
+    };
 #elif CONFIG_CAN_BACKEND_ARDUINO
     // init Arduino driver
 #endif

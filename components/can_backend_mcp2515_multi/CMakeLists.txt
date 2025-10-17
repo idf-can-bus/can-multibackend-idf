@@ -1,7 +1,12 @@
+set(MULTI_SRC
+  mcp2515_multi_adapter.c
+  mcp2515-esp32_multi/mcp2515_multi.c
+)
+
 idf_component_register(
-  SRCS "mcp2515_multi_adapter.c"
-  INCLUDE_DIRS "."
-  PRIV_REQUIRES can_iface driver
+  SRCS ${MULTI_SRC}
+  INCLUDE_DIRS "." "mcp2515-esp32_multi"
+  PRIV_REQUIRES can_iface driver freertos esp_timer
 )
 
 if(NOT CONFIG_CAN_BACKEND_MCP2515_MULTI)
