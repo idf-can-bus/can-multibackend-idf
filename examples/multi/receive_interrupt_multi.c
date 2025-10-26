@@ -10,9 +10,7 @@
 /*
  * Example: receive_interrupt_multi
  *
- * Note: Hardware configuration (number of instances, CS/INT pins) je stanovena
- * v examples/init_hardware.c. Tento příklad si počet instancí načítá dynamicky
- * přes can_configured_instance_count().
+ * Note: Hardware configuration is done in init_hardware.c
  */
 
 static const char *TAG = "receive_interrupt_multi";
@@ -61,9 +59,9 @@ static void can_rx_consumer_task(void *arg)
 
 void app_main(void)
 {
-    // Hardware init prepares SPI and creates three MCP2515 instances via adapter
-    can_config_t dummy_cfg; // unused in this path
-    init_hardware(&dummy_cfg);
+    // Init hardware & CAN system (explicit config)
+    static can_config_t cfg;
+    init_hardware(&cfg);
 
     rx_queue = xQueueCreate(RX_QUEUE_LENGTH, sizeof(can_message_t));
     if (!rx_queue) {
@@ -71,11 +69,10 @@ void app_main(void)
         return;
     }
 
-    ESP_LOGI(TAG, "Receiver interrupt-driven");
+    ESP_LOGI(TAG, "Receiver interrupt-driven, MCP2515 multi, %zu instances", cfg.instance_count);
 
-    size_t n = can_configured_instance_count();
     // Create one producer per instance
-    for (size_t i=0; i<n; ++i) {
+    for (size_t i=0; i<cfg.instance_count; ++i) {
         producer_arg_t *parg = (producer_arg_t*)pvPortMalloc(sizeof(producer_arg_t));
         if (!parg) continue;
         parg->index = i;

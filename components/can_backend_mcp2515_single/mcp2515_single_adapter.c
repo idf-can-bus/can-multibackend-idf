@@ -344,7 +344,11 @@ if (err != ESP_OK) {
         return false;
     }
     
-    // Step 8: Configure interrupts
+    // Step 8: Accept-all on RX buffers and enable rollover on RXB0 (BUKT)
+    MCP2515_setRegister(MCP_RXB0CTRL, RXBnCTRL_RXM_MASK | RXB0CTRL_BUKT);
+    MCP2515_setRegister(MCP_RXB1CTRL, RXBnCTRL_RXM_MASK);
+
+    // Step 9: Configure interrupts
     gpio_config_t io_conf = {
         .pin_bit_mask = 1ULL << cfg->int_pin,
         .mode = GPIO_MODE_INPUT,
@@ -359,20 +363,28 @@ if (err != ESP_OK) {
         return false;
     }
     
-    // Step 9: Install ISR service
+    // Step 10: Install ISR service
     err = gpio_install_isr_service(0);
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         ESP_LOGE(TAG, "Failed to install ISR service: %s", esp_err_to_name(err));
         return false;
     }
     
-    // Step 10: Add interrupt handler
+    // Step 11: Add interrupt handler
     err = gpio_isr_handler_add(cfg->int_pin, isr_handler, NULL);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to add interrupt handler: %s", esp_err_to_name(err));
         return false;
     }
     
+    // Clear any startup overrun/error flags if present and drain sporadic frames
+    MCP2515_clearRXnOVR();
+    MCP2515_clearERRIF();
+    while (MCP2515_checkReceive()) {
+        CAN_FRAME_t drain;
+        if (MCP2515_readMessageAfterStatCheck(drain) != ERROR_OK) break;
+    }
+
     ESP_LOGI(TAG, "MCP2515 adapter initialized successfully");
     #if MCP2515_ADAPTER_DEBUG
     if (cfg->enable_debug_spi) {

@@ -90,12 +90,9 @@ static void can_rx_consumer_task(void *arg)
 void app_main(void)
 {
     
-    // --- init hardware ----------------------------------------------------------------------------
-    can_config_t hw_config;
-    init_hardware(&hw_config);  // Refer to implementation for hardware initialization requirements
-
-    // --- common init ------------------------------------------------------------------------------
-    canif_init(&hw_config);
+    // --- init hardware & CAN system (explicit config) --------------------------------------------
+    static can_config_t cfg;
+    init_hardware(&cfg);
 
     // --- create RX queue --------------------------------------------------------------------------
     rx_queue = xQueueCreate(RX_QUEUE_LENGTH, sizeof(can_message_t));
@@ -117,7 +114,5 @@ void app_main(void)
     if (ok1 != pdPASS || ok2 != pdPASS) {
         ESP_LOGE(TAG, "Failed to create tasks (prod=%ld, cons=%ld)", (long)ok1, (long)ok2);
         return;
-    }
-
-    
+    }    
 }

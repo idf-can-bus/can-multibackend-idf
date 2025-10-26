@@ -9,12 +9,9 @@ static const char *TAG = "send_single";
 void app_main(void)
 {
 
-    // --- init hardware ----------------------------------------------------------------------------
-    can_config_t hw_config;
-    init_hardware(&hw_config);  // Refer to implementation for hardware initialization requirements
-
-    // --- common sender example part ---------------------------------------------------------------
-    canif_init(&hw_config);
+    // --- init hardware & CAN system (explicit config) --------------------------------------------
+    static can_config_t cfg;
+    init_hardware(&cfg);
 
     // --- global variables -------------------------------------------------------------------------
     can_message_t message;

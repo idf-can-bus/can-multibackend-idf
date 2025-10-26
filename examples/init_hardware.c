@@ -1,81 +1,93 @@
+// Core includes
 #include "driver/twai.h"
 #include "driver/gpio.h"
 #include "init_hardware.h"
 #include "esp_log.h"
+
+// Backend-specific includes
 #if CONFIG_CAN_BACKEND_MCP2515_SINGLE
+#include "mcp2515_single_adapter.h"  // for debug macro and types
 #include "mcp2515-esp32-idf/mcp2515.h"
 #endif
 #if CONFIG_CAN_BACKEND_MCP2515_MULTI
 #include "mcp2515_multi_adapter.h"
 #endif
 
-// Compile-time switch for SPI/link diagnostics in MCP2515 adapter
-#ifndef MCP2515_ADAPTER_DEBUG
-#define MCP2515_ADAPTER_DEBUG 1
-#endif
-
-void init_hardware(can_config_t *hw_config_ptr)
-{
+// ---------- TWAI helper ----------
 #if CONFIG_CAN_BACKEND_TWAI
-    // init TWAI controller
+static void configure_twai(can_config_t *hw_config_ptr)
+{
     ESP_LOGI("init_hardware", "Adapter: TWAI (builtin)");
     static const gpio_num_t TX_GPIO = GPIO_NUM_39;
     static const gpio_num_t RX_GPIO = GPIO_NUM_40;
     static const uint32_t TX_QUEUE_LEN = 20;
     static const uint32_t RX_QUEUE_LEN = 20;
 
-    *hw_config_ptr = (can_config_t){
+    *hw_config_ptr = (can_config_t){0};
+    hw_config_ptr->instance_count = 1;
+    hw_config_ptr->twai = (twai_config_t){
         .general_config = {
             .controller_id = 0,
             .mode = TWAI_MODE_NORMAL,
-            .tx_io = TX_GPIO, // GPIO 39
-            .rx_io = RX_GPIO, // GPIO 40
+            .tx_io = TX_GPIO,
+            .rx_io = RX_GPIO,
             .clkout_io = TWAI_IO_UNUSED,
             .bus_off_io = TWAI_IO_UNUSED,
             .tx_queue_len = TX_QUEUE_LEN,
             .rx_queue_len = RX_QUEUE_LEN,
-            .alerts_enabled = TWAI_ALERT_NONE, // TWAI_ALERT_RX_DATA | TWAI_ALERT_RX_FIFO_OVERRUN,
+            .alerts_enabled = TWAI_ALERT_NONE,
             .clkout_divider = 0,
             .intr_flags = ESP_INTR_FLAG_LEVEL1,
-            .general_flags = {0}
+            .general_flags = (twai_general_config_t){0}.general_flags
         },
-        .timing_config = TWAI_TIMING_CONFIG_1MBITS(),     // baudrate 1 Mbps
-        .filter_config = TWAI_FILTER_CONFIG_ACCEPT_ALL(), // accept all messages (not used for sending)
-        .receive_timeout = pdMS_TO_TICKS(100),            // in ms
-        .transmit_timeout = pdMS_TO_TICKS(100),           // in ms
-        .bus_off_timeout = pdMS_TO_TICKS(1000),           // in ms
-        .bus_not_running_timeout = pdMS_TO_TICKS(100),    // in ms
+        .timing_config = TWAI_TIMING_CONFIG_1MBITS(),
+        .filter_config = TWAI_FILTER_CONFIG_ACCEPT_ALL(),
+        .receive_timeout = pdMS_TO_TICKS(100),
+        .transmit_timeout = pdMS_TO_TICKS(100),
+        .bus_off_timeout = pdMS_TO_TICKS(1000),
+        .bus_not_running_timeout = pdMS_TO_TICKS(100),
     };
+}
+#endif // CONFIG_CAN_BACKEND_TWAI
 
-#elif CONFIG_CAN_BACKEND_MCP2515_SINGLE
+// ---------- MCP2515 single helper ----------
+#if CONFIG_CAN_BACKEND_MCP2515_SINGLE
+static void configure_mcp2515_single(can_config_t *hw_config_ptr)
+{
     ESP_LOGI("init_hardware", "Adapter: MCP2515_SINGLE");
-    // init MCP2515 controller
-    static const gpio_num_t MISO_GPIO = GPIO_NUM_37;  // SPI MISO
-    static const gpio_num_t MOSI_GPIO = GPIO_NUM_38;  // SPI MOSI
-    static const gpio_num_t SCLK_GPIO = GPIO_NUM_36;  // SPI SCLK
-    static const gpio_num_t CS_GPIO = GPIO_NUM_33;    // Chip Select
-    static const gpio_num_t INT_GPIO = GPIO_NUM_34;   // Interrupt
-    static const CAN_SPEED_t CAN_BAUDRATE = CAN_1000KBPS;     // 1 Mbps
-    static const CAN_CLOCK_t CAN_CLOCK = MCP_16MHZ;
-    static const spi_host_device_t SPI_HOST = SPI2_HOST;  // Explicitly define SPI host
-    static const bool USE_LOOPBACK = false;  // Use loopback mode for testing
-    static const bool ENABLE_DEBUG_SPI = (MCP2515_ADAPTER_DEBUG != 0);
 
-    *hw_config_ptr = (can_config_t){
+    static const gpio_num_t MISO_GPIO = GPIO_NUM_37;
+    static const gpio_num_t MOSI_GPIO = GPIO_NUM_38;
+    static const gpio_num_t SCLK_GPIO = GPIO_NUM_36;
+    static const gpio_num_t CS_GPIO   = GPIO_NUM_33;
+    static const gpio_num_t INT_GPIO  = GPIO_NUM_34;
+    static const CAN_SPEED_t CAN_BAUDRATE = CAN_1000KBPS;
+    static const CAN_CLOCK_t CAN_CLOCK     = MCP_16MHZ;
+    static const spi_host_device_t SPI_HOST = SPI2_HOST;
+    static const bool USE_LOOPBACK = false;
+    #if MCP2515_ADAPTER_DEBUG
+    static const bool ENABLE_DEBUG_SPI = true;
+    #else
+    static const bool ENABLE_DEBUG_SPI = false;
+    #endif
+
+    *hw_config_ptr = (can_config_t){0};
+    hw_config_ptr->instance_count = 1;
+    hw_config_ptr->single = (mcp2515_single_config_t){
         .spi_bus = {
             .miso_io_num = MISO_GPIO,
             .mosi_io_num = MOSI_GPIO,
             .sclk_io_num = SCLK_GPIO,
             .quadwp_io_num = -1,
             .quadhd_io_num = -1,
-            .max_transfer_sz = 0,        // No limit on transfer size
-            .flags = SPICOMMON_BUSFLAG_MASTER // Enable DMA
+            .max_transfer_sz = 0,
+            .flags = SPICOMMON_BUSFLAG_MASTER
         },
         .spi_dev = {
-            .mode = 0,                  // SPI mode 0 (CPOL=0, CPHA=0)
-            .clock_speed_hz = 10000000, // 10 MHz (40 MHz was before)
+            .mode = 0,
+            .clock_speed_hz = 10000000,
             .spics_io_num = CS_GPIO,
-            .queue_size = 1024,         // Increased queue size
+            .queue_size = 1024,
             .flags = 0,
             .command_bits = 0,
             .address_bits = 0,
@@ -84,139 +96,156 @@ void init_hardware(can_config_t *hw_config_ptr)
         .int_pin = INT_GPIO,
         .can_speed = CAN_BAUDRATE,
         .can_clock = CAN_CLOCK,
-        .spi_host = SPI_HOST,            // Add SPI host to config
+        .spi_host = SPI_HOST,
         .use_loopback = USE_LOOPBACK,
         .enable_debug_spi = ENABLE_DEBUG_SPI
     };
+}
+#endif // CONFIG_CAN_BACKEND_MCP2515_SINGLE
 
-#elif CONFIG_CAN_BACKEND_MCP2515_MULTI 
-    // Two sub-modes: single-instance or three-instances on one SPI bus
-    // Select by example: single/* -> single-instance; multi/* -> three instances
-    #if CONFIG_EXAMPLE_RECV_INT_MULTI || CONFIG_EXAMPLE_RECV_POLL_MULTI || CONFIG_EXAMPLE_SEND_MULTI
-    ESP_LOGI("init_hardware", "Adapter: MCP2515_MULTI (three instances on one SPI)");
-    // Configure the first instance via can_config_t; the adapter init will be called with array later.
-    // For compatibility with canif_init(cfg) taking a single can_config_t, we will trigger adapter
-    // initialization for all three instances here and pass a dummy cfg to canif_init.
-    {
-        mcp_multi_instance_cfg_t instances[3] = {
-            {
+// ---------- MCP2515 multi helpers ----------
+#if CONFIG_CAN_BACKEND_MCP2515_MULTI
+static void configure_mcp2515_multi_send(can_config_t *hw_config_ptr)
+{
+    ESP_LOGI("init_hardware", "Adapter: MCP2515_MULTI (send bundle)");
+    *hw_config_ptr = (can_config_t){0};
+    hw_config_ptr->instance_count = 1;
+    hw_config_ptr->multi = (mcp_multi_bundle_cfg_t){
+        .instances = {
+            (mcp_multi_instance_cfg_t){
                 .host = SPI2_HOST,
                 .bus_cfg = {
-                    .miso_io_num = GPIO_NUM_37,
-                    .mosi_io_num = GPIO_NUM_38,
-                    .sclk_io_num = GPIO_NUM_36,
+                    .miso_io_num = GPIO_NUM_15,
+                    .mosi_io_num = GPIO_NUM_16,
+                    .sclk_io_num = GPIO_NUM_14,
                     .quadwp_io_num = -1,
                     .quadhd_io_num = -1,
                 },
                 .dev_cfg = {
                     .mode = 0,
                     .clock_speed_hz = 10000000,
-                    .spics_io_num = GPIO_NUM_33,   // CS A
+                    .spics_io_num = GPIO_NUM_11,
                     .queue_size = 64,
                     .flags = 0,
                     .command_bits = 0,
                     .address_bits = 0,
                     .dummy_bits = 0,
                 },
-                .int_gpio = GPIO_NUM_34,            // INT A
-                .can_speed = CAN_1000KBPS,
-                .can_clock = MCP_16MHZ,
-            },
-            {
-                .host = SPI2_HOST,
-                .bus_cfg = {
-                    .miso_io_num = GPIO_NUM_37,
-                    .mosi_io_num = GPIO_NUM_38,
-                    .sclk_io_num = GPIO_NUM_36,
-                    .quadwp_io_num = -1,
-                    .quadhd_io_num = -1,
-                },
-                .dev_cfg = {
-                    .mode = 0,
-                    .clock_speed_hz = 10000000,
-                    .spics_io_num = GPIO_NUM_35,   // CS B (inferred)
-                    .queue_size = 64,
-                    .flags = 0,
-                    .command_bits = 0,
-                    .address_bits = 0,
-                    .dummy_bits = 0,
-                },
-                .int_gpio = GPIO_NUM_39,            // INT B (inferred)
-                .can_speed = CAN_1000KBPS,
-                .can_clock = MCP_16MHZ,
-            },
-            {
-                .host = SPI2_HOST,
-                .bus_cfg = {
-                    .miso_io_num = GPIO_NUM_37,
-                    .mosi_io_num = GPIO_NUM_38,
-                    .sclk_io_num = GPIO_NUM_36,
-                    .quadwp_io_num = -1,
-                    .quadhd_io_num = -1,
-                },
-                .dev_cfg = {
-                    .mode = 0,
-                    .clock_speed_hz = 10000000,
-                    .spics_io_num = GPIO_NUM_40,   // CS C (inferred)
-                    .queue_size = 64,
-                    .flags = 0,
-                    .command_bits = 0,
-                    .address_bits = 0,
-                    .dummy_bits = 0,
-                },
-                .int_gpio = GPIO_NUM_12,            // INT C (inferred)
-                .can_speed = CAN_1000KBPS,
-                .can_clock = MCP_16MHZ,
-            },
-        };
-        (void)mcp2515_multi_init(instances, 3);
-        *hw_config_ptr = (can_config_t){0};
-    }
-    #else
-    ESP_LOGI("init_hardware", "Adapter: MCP2515_MULTI (single-instance test)");
-    // Prepare configuration for one instance; actual init is done in canif_init()
-    *hw_config_ptr = (can_config_t){
-        .host = SPI2_HOST,
-        .bus_cfg = {
-            .miso_io_num = GPIO_NUM_37,
-            .mosi_io_num = GPIO_NUM_38,
-            .sclk_io_num = GPIO_NUM_36,
-            .quadwp_io_num = -1,
-            .quadhd_io_num = -1,
-        },
-        .dev_cfg = {
-            .mode = 0,
-            .clock_speed_hz = 10000000,
-            .spics_io_num = GPIO_NUM_33,
-            .queue_size = 64,
-            .flags = 0,
-            .command_bits = 0,
-            .address_bits = 0,
-            .dummy_bits = 0,
-        },
-        .int_gpio = GPIO_NUM_34,
-        .can_speed = CAN_1000KBPS,
-        .can_clock = MCP_16MHZ,
+            }
+        }
     };
-    #endif
-#elif CONFIG_CAN_BACKEND_ARDUINO
-    // init Arduino driver
-#endif
 }
 
-size_t can_configured_instance_count(void)
+static void configure_mcp2515_multi_receive(can_config_t *hw_config_ptr)
+{
+    ESP_LOGI("init_hardware", "Adapter: MCP2515_MULTI (receive bundle)");
+    *hw_config_ptr = (can_config_t){0};
+    mcp_multi_instance_cfg_t tmp[] = {
+        (mcp_multi_instance_cfg_t){
+            .host = SPI1_HOST,
+            .bus_cfg = {
+                .miso_io_num = GPIO_NUM_15,
+                .mosi_io_num = GPIO_NUM_16,
+                .sclk_io_num = GPIO_NUM_14,
+                .quadwp_io_num = -1,
+                .quadhd_io_num = -1,
+            },
+            .dev_cfg = {
+                .mode = 0,
+                .clock_speed_hz = 10000000,
+                .spics_io_num = GPIO_NUM_33,   // CS A
+                .queue_size = 64,
+                .flags = 0,
+                .command_bits = 0,
+                .address_bits = 0,
+                .dummy_bits = 0,
+            },
+            .int_gpio = GPIO_NUM_34,
+            .can_speed = CAN_1000KBPS,
+            .can_clock = MCP_16MHZ,
+        },
+        (mcp_multi_instance_cfg_t){
+            .host = SPI2_HOST,
+            .bus_cfg = {
+                .miso_io_num = GPIO_NUM_37,
+                .mosi_io_num = GPIO_NUM_38,
+                .sclk_io_num = GPIO_NUM_36,
+                .quadwp_io_num = -1,
+                .quadhd_io_num = -1,
+            },
+            .dev_cfg = {
+                .mode = 0,
+                .clock_speed_hz = 10000000,
+                .spics_io_num = GPIO_NUM_35,   // CS B
+                .queue_size = 64,
+                .flags = 0,
+                .command_bits = 0,
+                .address_bits = 0,
+                .dummy_bits = 0,
+            },
+            .int_gpio = GPIO_NUM_39,
+            .can_speed = CAN_1000KBPS,
+            .can_clock = MCP_16MHZ,
+        },
+        (mcp_multi_instance_cfg_t){
+            .host = SPI2_HOST,
+            .bus_cfg = {
+                .miso_io_num = GPIO_NUM_37,
+                .mosi_io_num = GPIO_NUM_38,
+                .sclk_io_num = GPIO_NUM_36,
+                .quadwp_io_num = -1,
+                .quadhd_io_num = -1,
+            },
+            .dev_cfg = {
+                .mode = 0,
+                .clock_speed_hz = 10000000,
+                .spics_io_num = GPIO_NUM_40,   // CS C
+                .queue_size = 64,
+                .flags = 0,
+                .command_bits = 0,
+                .address_bits = 0,
+                .dummy_bits = 0,
+            },
+            .int_gpio = GPIO_NUM_12,
+            .can_speed = CAN_1000KBPS,
+            .can_clock = MCP_16MHZ,
+        }
+    };
+
+    hw_config_ptr->instance_count = sizeof(tmp)/sizeof(tmp[0]);
+    hw_config_ptr->multi.instance_count = hw_config_ptr->instance_count;
+    for (size_t i=0; i<hw_config_ptr->multi.instance_count; ++i) {
+        hw_config_ptr->multi.instances[i] = tmp[i];
+    }
+}
+#endif
+
+// ---------- Dispatcher ----------
+static void configure_hardware(can_config_t *hw_config_ptr)
 {
 #if CONFIG_CAN_BACKEND_TWAI
-    return 1;
+    configure_twai(hw_config_ptr);
 #elif CONFIG_CAN_BACKEND_MCP2515_SINGLE
-    return 1;
+    configure_mcp2515_single(hw_config_ptr);
 #elif CONFIG_CAN_BACKEND_MCP2515_MULTI
-    #if CONFIG_EXAMPLE_RECV_INT_MULTI || CONFIG_EXAMPLE_RECV_POLL_MULTI || CONFIG_EXAMPLE_SEND_MULTI
-    return 3; // three instances configured in this build profile
-    #else
-    return 1; // single-instance test
-    #endif
+  #if EXAMPLE_SEND_MULTI
+    configure_mcp2515_multi_send(hw_config_ptr);
+  #elif EXAMPLE_RECV_POLL_MULTI || EXAMPLE_RECV_INT_MULTI
+    configure_mcp2515_multi_receive(hw_config_ptr);
+  #else
+    ESP_LOGW("init_hardware", "MCP2515_MULTI selected but no example variant defined");
+  #endif
+#elif CONFIG_CAN_BACKEND_ARDUINO
+    ESP_LOGW("init_hardware", "Arduino backend not implemented");
 #else
-    return 1;
+    ESP_LOGE("init_hardware", "No CAN backend selected");
 #endif
 }
+
+void init_hardware(can_config_t *hw_config_ptr)
+{
+    configure_hardware(hw_config_ptr);
+    (void)canif_init(hw_config_ptr);
+}
+
+

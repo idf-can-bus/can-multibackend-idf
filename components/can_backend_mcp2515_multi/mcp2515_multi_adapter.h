@@ -18,6 +18,17 @@ typedef struct {
     CAN_CLOCK_t       can_clock;
 } mcp_multi_instance_cfg_t;
 
+// Maximum number of instances supported in a single bundle
+#ifndef MCP_MULTI_MAX_INSTANCES
+#define MCP_MULTI_MAX_INSTANCES 8
+#endif
+
+// Bundle configuration for multiple MCP2515 instances
+typedef struct {
+    size_t instance_count;
+    mcp_multi_instance_cfg_t instances[MCP_MULTI_MAX_INSTANCES];
+} mcp_multi_bundle_cfg_t;
+
 bool mcp2515_multi_init(const mcp_multi_instance_cfg_t* instances, size_t count);
 bool mcp2515_multi_deinit(void);
 
