@@ -25,9 +25,9 @@ class PortMonitorProcess:
             self,
             config: ShellCommandConfig,
             port_log_widget,
-            read_timeout: float = 0.01,
-            write_timeout: float = 0.01,
-            buffer_size: int = 50
+            read_timeout: float = 0.001,
+            chunk_size: int = 4096,
+            flush_interval: float = 0.05
     ):
         """
         Initialize monitor process.
@@ -36,20 +36,21 @@ class PortMonitorProcess:
             config: Shell command configuration with monitor command
             port_log_widget: Log widget to write output to
             read_timeout: Timeout for subprocess read operations (seconds)
-            write_timeout: Timeout for widget write operations (seconds)
-            buffer_size: Character buffer size (0 = immediate char-by-char output)
+            chunk_size: Bytes to read per operation (larger = faster)
+            flush_interval: Minimum interval between writes to widget (seconds)
         """
         self.config = config
         self.port_log_widget = port_log_widget
         self.process = None
         self.running = False
         self.read_timeout = read_timeout
-        self.write_timeout = write_timeout
-        self.buffer_size = buffer_size
+        self.chunk_size = chunk_size
+        self.flush_interval = flush_interval
         self.stdout_buffer = ""
         self.stderr_buffer = ""
         self.stdout_task = None
         self.stderr_task = None
+        self.last_flush_time = 0.0
         
     async def start(self) -> int:
         """
@@ -79,47 +80,57 @@ class PortMonitorProcess:
             
     async def _stream_output(self, stream, prefix: str = ""):
         """
-        Stream subprocess output to log widget with buffering.
+        Stream subprocess output to log widget with optimized buffering.
+        Reads larger chunks and flushes periodically for better performance.
         
         Args:
             stream: Asyncio stream to read from (stdout or stderr)
             prefix: Prefix string for output lines (e.g., "STDERR: ")
         """
         try:
-            buffer = self.stdout_buffer if prefix == "" else self.stderr_buffer
+            buffer = ""
+            last_flush = asyncio.get_event_loop().time()
             
             while self.running:
                 try:
-                    data = await asyncio.wait_for(stream.read(1), timeout=self.read_timeout)
+                    data = await asyncio.wait_for(
+                        stream.read(self.chunk_size), 
+                        timeout=self.read_timeout
+                    )
                     if not data:
                         break
                     
-                    char = data.decode('utf-8', errors='replace')
-                    if char:
-                        buffer += char
-                        should_write = (
-                            char == '\n' or 
-                            (self.buffer_size > 0 and len(buffer) >= self.buffer_size) or
-                            (self.buffer_size == 0)
-                        )
-                        
-                        if should_write:
-                            await asyncio.wait_for(
-                                asyncio.to_thread(self._write_to_textarea, f"{prefix}{buffer}"),
-                                timeout=self.write_timeout
-                            )
-                            buffer = ""
+                    chunk = data.decode('utf-8', errors='replace')
+                    buffer += chunk
+                    
+                    current_time = asyncio.get_event_loop().time()
+                    time_since_flush = current_time - last_flush
+                    
+                    should_flush = (
+                        '\n' in chunk or
+                        len(buffer) >= self.chunk_size or
+                        time_since_flush >= self.flush_interval
+                    )
+                    
+                    if should_flush and buffer:
+                        self._write_to_textarea(f"{prefix}{buffer}")
+                        buffer = ""
+                        last_flush = current_time
                         
                 except asyncio.TimeoutError:
+                    if buffer:
+                        current_time = asyncio.get_event_loop().time()
+                        if current_time - last_flush >= self.flush_interval:
+                            self._write_to_textarea(f"{prefix}{buffer}")
+                            buffer = ""
+                            last_flush = current_time
                     continue
                 except Exception as e:
                     self._write_to_textarea(f"Stream error: {e}\n")
                     break
+                    
             if buffer:
-                await asyncio.wait_for(
-                    asyncio.to_thread(self._write_to_textarea, f"{prefix}{buffer}"),
-                    timeout=self.write_timeout
-                )
+                self._write_to_textarea(f"{prefix}{buffer}")
                     
         except Exception as e:
             self._write_to_textarea(f"Stream error: {e}\n")
@@ -187,9 +198,9 @@ class ShellMonitorLogic:
     def __init__(
         self, 
         idf_setup_path: str = "~/esp/v5.4.1/esp-idf/export.sh",
-        read_timeout: float = 0.01,
-        write_timeout: float = 0.01,
-        buffer_size: int = 50
+        read_timeout: float = 0.001,
+        chunk_size: int = 4096,
+        flush_interval: float = 0.05
     ):
         """
         Initialize monitor logic manager.
@@ -197,13 +208,13 @@ class ShellMonitorLogic:
         Args:
             idf_setup_path: Path to ESP-IDF environment setup script
             read_timeout: Subprocess read timeout in seconds
-            write_timeout: Widget write timeout in seconds
-            buffer_size: Output buffer size (0 = immediate char-by-char output)
+            chunk_size: Bytes to read per operation (larger = faster throughput)
+            flush_interval: Minimum interval between writes to widget (seconds)
         """
         self.idf_setup_path = os.path.expanduser(idf_setup_path)
         self.read_timeout = read_timeout
-        self.write_timeout = write_timeout
-        self.buffer_size = buffer_size
+        self.chunk_size = chunk_size
+        self.flush_interval = flush_interval
         self.active_monitors: Dict[str, PortMonitorProcess] = {}
         self.port_loggers: Dict[str, object] = {}
         self.worker_tasks: Dict[str, object] = {}
@@ -236,8 +247,8 @@ class ShellMonitorLogic:
             config=config, 
             port_log_widget=monitor_log_widget,
             read_timeout=self.read_timeout,
-            write_timeout=self.write_timeout,
-            buffer_size=self.buffer_size
+            chunk_size=self.chunk_size,
+            flush_interval=self.flush_interval
         )
         
         self.active_monitors[port] = process

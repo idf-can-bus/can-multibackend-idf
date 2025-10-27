@@ -81,9 +81,9 @@ class AppGui(App):
         )
         self.monitor_logic = ShellMonitorLogic(
             idf_setup_path=idf_setup_path,
-            read_timeout=0.01,
-            write_timeout=0.01,
-            buffer_size=0
+            read_timeout=0.001,
+            chunk_size=4096,
+            flush_interval=0.05
         )
         self.ports, self.real_ports_found = self.logic.find_flash_ports()
 

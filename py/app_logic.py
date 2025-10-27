@@ -158,8 +158,8 @@ class FlashApp:
             create_symbolic_link(abs_old_path, abs_link_path)
         if not os.path.exists(f"{workspace_dir}/sdkconfig"):
             shutil.copy(self.sdkconfig_path, f"{workspace_dir}/sdkconfig")
-        else:
-            self.sdkconfig = Sdkconfig(f"{workspace_dir}/sdkconfig", self.menu_name)
+        # Always reload sdkconfig from workspace path to operate on the correct file
+        self.sdkconfig = Sdkconfig(f"{workspace_dir}/sdkconfig", self.menu_name)
         self._workspace_path = workspace_dir
         reconfig_logger.info(f"Switched to workspace: {workspace_dir}")
         return True
@@ -181,6 +181,8 @@ class FlashApp:
             all_options = self.kconfig_dict.get_all_options()
             config_ids = list(all_options.keys())
             reconfig_logger.debug(f"Found {len(config_ids)} config options: {config_ids}")
+            # Ensure selected keys exist in sdkconfig so they can be set correctly
+            self.sdkconfig.add_no_existing_bool_keys([lib_id, example_id])
             relevant_lines = {}
             for config_id in config_ids:
                 line = self.sdkconfig.get_line_by_key(config_id)
