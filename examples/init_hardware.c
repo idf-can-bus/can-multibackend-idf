@@ -90,13 +90,64 @@ void init_hardware(can_config_t *hw_config_ptr)
     };
 
 #elif CONFIG_CAN_BACKEND_MCP2515_MULTI 
-    // Two sub-modes: single-instance or three-instances on one SPI bus
-    // Select by example: single/* -> single-instance; multi/* -> three instances
-    #if CONFIG_EXAMPLE_RECV_INT_MULTI || CONFIG_EXAMPLE_RECV_POLL_MULTI || CONFIG_EXAMPLE_SEND_MULTI
+    // Multi-adapter variants separated by example selection
+    #if CONFIG_EXAMPLE_SEND_MULTI
+    ESP_LOGI("init_hardware", "Adapter: MCP2515_MULTI (send_multi: two instances on SPI3)");
+    {
+        mcp_multi_instance_cfg_t instances[2] = {
+            {
+                .host = SPI3_HOST,
+                .bus_cfg = {
+                    .miso_io_num = GPIO_NUM_15,
+                    .mosi_io_num = GPIO_NUM_16,
+                    .sclk_io_num = GPIO_NUM_14,
+                    .quadwp_io_num = -1,
+                    .quadhd_io_num = -1,
+                },
+                .dev_cfg = {
+                    .mode = 0,
+                    .clock_speed_hz = 10000000,
+                    .spics_io_num = GPIO_NUM_11,   // CS A
+                    .queue_size = 64,
+                    .flags = 0,
+                    .command_bits = 0,
+                    .address_bits = 0,
+                    .dummy_bits = 0,
+                },
+                .int_gpio = -1,                     // no INT needed for pure TX
+                .can_speed = CAN_1000KBPS,
+                .can_clock = MCP_16MHZ,
+            },
+            {
+                .host = SPI3_HOST,
+                .bus_cfg = {
+                    .miso_io_num = GPIO_NUM_15,
+                    .mosi_io_num = GPIO_NUM_16,
+                    .sclk_io_num = GPIO_NUM_14,
+                    .quadwp_io_num = -1,
+                    .quadhd_io_num = -1,
+                },
+                .dev_cfg = {
+                    .mode = 0,
+                    .clock_speed_hz = 10000000,
+                    .spics_io_num = GPIO_NUM_17,   // CS B
+                    .queue_size = 64,
+                    .flags = 0,
+                    .command_bits = 0,
+                    .address_bits = 0,
+                    .dummy_bits = 0,
+                },
+                .int_gpio = -1,                     // no INT needed for pure TX
+                .can_speed = CAN_1000KBPS,
+                .can_clock = MCP_16MHZ,
+            },
+        };
+        (void)mcp2515_multi_init(instances, 2);
+        // Inform the example via can_configured_instance_count()
+        *hw_config_ptr = (can_config_t){0};
+    }
+    #elif CONFIG_EXAMPLE_RECV_INT_MULTI || CONFIG_EXAMPLE_RECV_POLL_MULTI
     ESP_LOGI("init_hardware", "Adapter: MCP2515_MULTI (three instances on one SPI)");
-    // Configure the first instance via can_config_t; the adapter init will be called with array later.
-    // For compatibility with canif_init(cfg) taking a single can_config_t, we will trigger adapter
-    // initialization for all three instances here and pass a dummy cfg to canif_init.
     {
         mcp_multi_instance_cfg_t instances[3] = {
             {
@@ -174,7 +225,6 @@ void init_hardware(can_config_t *hw_config_ptr)
     }
     #else
     ESP_LOGI("init_hardware", "Adapter: MCP2515_MULTI (single-instance test)");
-    // Prepare configuration for one instance; actual init is done in canif_init()
     *hw_config_ptr = (can_config_t){
         .host = SPI2_HOST,
         .bus_cfg = {
@@ -211,7 +261,9 @@ size_t can_configured_instance_count(void)
 #elif CONFIG_CAN_BACKEND_MCP2515_SINGLE
     return 1;
 #elif CONFIG_CAN_BACKEND_MCP2515_MULTI
-    #if CONFIG_EXAMPLE_RECV_INT_MULTI || CONFIG_EXAMPLE_RECV_POLL_MULTI || CONFIG_EXAMPLE_SEND_MULTI
+    #if CONFIG_EXAMPLE_SEND_MULTI
+    return 2; // send_multi uses two instances on SPI3
+    #elif CONFIG_EXAMPLE_RECV_INT_MULTI || CONFIG_EXAMPLE_RECV_POLL_MULTI
     return 3; // three instances configured in this build profile
     #else
     return 1; // single-instance test
