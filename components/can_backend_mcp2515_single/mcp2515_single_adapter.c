@@ -7,7 +7,8 @@
 #include <stdlib.h>
 
 static const char *TAG = "MCP2515_SINGLE_ADAPTER";
-static mcp2515_single_config_t mcp2515_config;
+// Keep pointer to bundle (provided by example config, typically static const)
+static const mcp2515_bundle_config_t *s_bundle = NULL;
 static volatile bool interrupt_pending = false;
 
 // Compile-time switch for SPI/link diagnostics in MCP2515 adapter
@@ -79,12 +80,11 @@ static void IRAM_ATTR isr_handler(void* arg) {
     interrupt_pending = true;
 }
 
-// test GPIO Configuration (CS pin)
+// (Optional) test CS GPIO manually for diagnostics
 #if MCP2515_ADAPTER_DEBUG
-static void test_gpio_configuration(const mcp2515_single_config_t *cfg) {
-     // Test CS pin manually
-     gpio_config_t cs_test = {
-        .pin_bit_mask = (1ULL << cfg->spi_dev.spics_io_num),
+static void test_gpio_cs(gpio_num_t cs_gpio) {
+    gpio_config_t cs_test = {
+        .pin_bit_mask = (1ULL << cs_gpio),
         .mode = GPIO_MODE_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -92,30 +92,35 @@ static void test_gpio_configuration(const mcp2515_single_config_t *cfg) {
     };
     ESP_LOGI(TAG, "Testing GPIO Configuration.");
     gpio_config(&cs_test);
-    
-    ESP_LOGI(TAG, "Testing CS pin (GPIO %d)", cfg->spi_dev.spics_io_num);
-    gpio_set_level(cfg->spi_dev.spics_io_num, 1);  // High
+    ESP_LOGI(TAG, "Testing CS pin (GPIO %d)", cs_gpio);
+    gpio_set_level(cs_gpio, 1);
     vTaskDelay(pdMS_TO_TICKS(100));
     ESP_LOGI(TAG, "CS HIGH - measure voltage on CS pin now");
-    gpio_set_level(cfg->spi_dev.spics_io_num, 0);  // Low
+    gpio_set_level(cs_gpio, 0);
     vTaskDelay(pdMS_TO_TICKS(100));
     ESP_LOGI(TAG, "CS LOW - measure voltage on CS pin now");
-    gpio_set_level(cfg->spi_dev.spics_io_num, 1);  // Back to high
+    gpio_set_level(cs_gpio, 1);
 }
 #endif
 
 
 // Initialize MCP2515
-bool mcp2515_single_init(const mcp2515_single_config_t *cfg) {
+bool mcp2515_single_init(const mcp2515_bundle_config_t *cfg) {
     ESP_LOGI(TAG, "Initializing MCP2515 adapter");
+    // Expect at least one device in the bundle
+    if (cfg == NULL || cfg->device_count < 1 || cfg->devices == NULL) {
+        ESP_LOGE(TAG, "Invalid bundle configuration");
+        return false;
+    }
+
+    s_bundle = cfg;
+    const mcp2515_device_config_t *dev0 = &s_bundle->devices[0];
+
     #if MCP2515_ADAPTER_DEBUG
-    if (cfg->enable_debug_spi) {
-        test_gpio_configuration(cfg);
+    if (mcp2515_config.enable_debug_spi) {
+        test_gpio_configuration((const mcp2515_single_config_t*)&mcp2515_config);
     }
     #endif
-
-    // Store configuration
-    memcpy(&mcp2515_config, cfg, sizeof(mcp2515_single_config_t));
     
     // Step 1: Initialize MCP2515 chip structure
     ERROR_t ret = MCP2515_init();
@@ -126,23 +131,30 @@ bool mcp2515_single_init(const mcp2515_single_config_t *cfg) {
     
     // Step 2: Initialize SPI bus
     #if MCP2515_ADAPTER_DEBUG
-    if (cfg->enable_debug_spi) {
-        ESP_LOGI("HARDWARE", "GPIO Configuration:");
-        ESP_LOGI("HARDWARE", "  MISO: GPIO_%d", cfg->spi_bus.miso_io_num);
-        ESP_LOGI("HARDWARE", "  MOSI: GPIO_%d", cfg->spi_bus.mosi_io_num);
-        ESP_LOGI("HARDWARE", "  SCLK: GPIO_%d", cfg->spi_bus.sclk_io_num);
-        ESP_LOGI("HARDWARE", "  CS:   GPIO_%d", cfg->spi_dev.spics_io_num);
-        ESP_LOGI("HARDWARE", "  INT:  GPIO_%d", cfg->int_pin);
-    }
+    ESP_LOGI("HARDWARE", "GPIO Configuration:");
+    ESP_LOGI("HARDWARE", "  MISO: GPIO_%d", s_bundle->bus.wiring.miso_io_num);
+    ESP_LOGI("HARDWARE", "  MOSI: GPIO_%d", s_bundle->bus.wiring.mosi_io_num);
+    ESP_LOGI("HARDWARE", "  SCLK: GPIO_%d", s_bundle->bus.wiring.sclk_io_num);
+    ESP_LOGI("HARDWARE", "  CS:   GPIO_%d", dev0->wiring.cs_gpio);
+    ESP_LOGI("HARDWARE", "  INT:  GPIO_%d", dev0->wiring.int_gpio);
     #endif
-esp_err_t err = spi_bus_initialize(cfg->spi_host, &cfg->spi_bus, SPI_DMA_CH_AUTO);
+
+    // Map bus config and initialize
+    spi_bus_config_t idf_bus_cfg;
+    spi_host_device_t host;
+    int dma_chan;
+    if (!mcp_spi_bus_to_idf(&s_bundle->bus, &host, &idf_bus_cfg, &dma_chan)) {
+        ESP_LOGE(TAG, "Invalid SPI bus configuration");
+        return false;
+    }
+    esp_err_t err = spi_bus_initialize(host, &idf_bus_cfg, SPI_DMA_CH_AUTO);
 if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize SPI bus: %s", esp_err_to_name(err));
         return false;
     }
     
     // Step 3: Add MCP2515 device to SPI bus
-    err = spi_bus_add_device(cfg->spi_host, &cfg->spi_dev, &MCP2515_Object->spi);
+    err = spi_bus_add_device(mcp2515_config.spi_host, &mcp2515_config.spi_dev, &MCP2515_Object->spi);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to add MCP2515 device to SPI bus: %s", esp_err_to_name(err));
         return false;
@@ -156,8 +168,8 @@ if (err != ESP_OK) {
     }
     
     // Step 5: Set bitrate
-    ESP_LOGI(TAG, "Setting bitrate: speed=%d, clock=%d", cfg->can_speed, cfg->can_clock);
-    ret = MCP2515_setBitrate(cfg->can_speed, cfg->can_clock);
+    ESP_LOGI(TAG, "Setting bitrate: speed=%d, clock=%d", mcp2515_config.can_speed, mcp2515_config.can_clock);
+    ret = MCP2515_setBitrate(mcp2515_config.can_speed, mcp2515_config.can_clock);
     if (ret != ERROR_OK) {
         ESP_LOGE(TAG, "Failed to set bitrate: %d", ret);
         return false;
@@ -165,12 +177,10 @@ if (err != ESP_OK) {
     ESP_LOGI(TAG, "Bitrate set successfully");
 
     #if MCP2515_ADAPTER_DEBUG
-    if (cfg->enable_debug_spi) {
-        // Enable CLKOUT for diagnostics (verifies oscillator is running)
-        ESP_LOGI(TAG, "Enabling CLKOUT for diagnostics");
-        MCP2515_setClkOut(CLKOUT_DIV1);
-        vTaskDelay(pdMS_TO_TICKS(50));
-    }
+    // Enable CLKOUT for diagnostics (verifies oscillator is running)
+    ESP_LOGI(TAG, "Enabling CLKOUT for diagnostics");
+    MCP2515_setClkOut(CLKOUT_DIV1);
+    vTaskDelay(pdMS_TO_TICKS(50));
     #endif
 
     // Step 6: Switch to normal mode or loopback mode with detailed diagnostics
@@ -179,7 +189,7 @@ if (err != ESP_OK) {
     const char* mode_name;
     #endif
 
-    if (cfg->use_loopback) {
+    if (mcp2515_config.use_loopback) {
         target_mode = CANCTRL_REQOP_LOOPBACK;
         #if MCP2515_ADAPTER_DEBUG
         mode_name = "loopback";
@@ -192,19 +202,15 @@ if (err != ESP_OK) {
     }
 
     #if MCP2515_ADAPTER_DEBUG
-    if (cfg->enable_debug_spi) {
-        ESP_LOGI(TAG, "Attempting to switch to %s mode (0x%02X)", mode_name, target_mode);
-    }
+    ESP_LOGI(TAG, "Attempting to switch to %s mode (0x%02X)", mode_name, target_mode);
     #endif
 
     // Read current state BEFORE attempting change
     #if MCP2515_ADAPTER_DEBUG
     uint8_t canstat_before = MCP2515_readRegister(MCP_CANSTAT);
     uint8_t canctrl_before = MCP2515_readRegister(MCP_CANCTRL);
-    if (cfg->enable_debug_spi) {
-        ESP_LOGI(TAG, "BEFORE: CANSTAT=0x%02X (mode=%d), CANCTRL=0x%02X",
-                 canstat_before, (canstat_before >> 5) & 0x07, canctrl_before);
-    }
+    ESP_LOGI(TAG, "BEFORE: CANSTAT=0x%02X (mode=%d), CANCTRL=0x%02X",
+             canstat_before, (canstat_before >> 5) & 0x07, canctrl_before);
     #endif
 
     // Request mode change
@@ -220,17 +226,13 @@ if (err != ESP_OK) {
 
         #if MCP2515_ADAPTER_DEBUG
         uint8_t canctrl = MCP2515_readRegister(MCP_CANCTRL);
-        if (cfg->enable_debug_spi) {
-            ESP_LOGI(TAG, "  Attempt %d: CANSTAT=0x%02X (mode=%d), CANCTRL=0x%02X (want mode=%d)",
-                     attempt, canstat, current_mode, canctrl, requested_mode);
-        }
+        ESP_LOGI(TAG, "  Attempt %d: CANSTAT=0x%02X (mode=%d), CANCTRL=0x%02X (want mode=%d)",
+                 attempt, canstat, current_mode, canctrl, requested_mode);
         #endif
 
         if (current_mode == requested_mode) {
             #if MCP2515_ADAPTER_DEBUG
-            if (cfg->enable_debug_spi) {
-                ESP_LOGI(TAG, "  SUCCESS! Mode changed to %d", current_mode);
-            }
+            ESP_LOGI(TAG, "  SUCCESS! Mode changed to %d", current_mode);
             #endif
             mode_ok = true;
             break;
@@ -241,9 +243,7 @@ if (err != ESP_OK) {
 
     if (!mode_ok) {
         #if MCP2515_ADAPTER_DEBUG
-        if (cfg->enable_debug_spi) {
-            ESP_LOGE(TAG, "FAILED to set %s mode after 10 attempts!", mode_name);
-        }
+        ESP_LOGE(TAG, "FAILED to set %s mode after 10 attempts!", mode_name);
         #endif
 
         // Read all relevant registers for debugging
@@ -253,22 +253,18 @@ if (err != ESP_OK) {
         uint8_t cnf1 = MCP2515_readRegister(MCP_CNF1);
         uint8_t cnf2 = MCP2515_readRegister(MCP_CNF2);
         uint8_t cnf3 = MCP2515_readRegister(MCP_CNF3);
-        if (cfg->enable_debug_spi) {
-            ESP_LOGE(TAG, "Final registers:");
-            ESP_LOGE(TAG, "  CANSTAT: 0x%02X (mode=%d)", canstat, (canstat >> 5) & 0x07);
-            ESP_LOGE(TAG, "  CANCTRL: 0x%02X", canctrl);
-            ESP_LOGE(TAG, "  CNF1:    0x%02X", cnf1);
-            ESP_LOGE(TAG, "  CNF2:    0x%02X", cnf2);
-            ESP_LOGE(TAG, "  CNF3:    0x%02X", cnf3);
-        }
+        ESP_LOGE(TAG, "Final registers:");
+        ESP_LOGE(TAG, "  CANSTAT: 0x%02X (mode=%d)", canstat, (canstat >> 5) & 0x07);
+        ESP_LOGE(TAG, "  CANCTRL: 0x%02X", canctrl);
+        ESP_LOGE(TAG, "  CNF1:    0x%02X", cnf1);
+        ESP_LOGE(TAG, "  CNF2:    0x%02X", cnf2);
+        ESP_LOGE(TAG, "  CNF3:    0x%02X", cnf3);
         #endif
 
         return false;
     }
     #if MCP2515_ADAPTER_DEBUG
-    if (cfg->enable_debug_spi) {
-        ESP_LOGI(TAG, "Mode successfully set to %s", mode_name);
-    }
+    ESP_LOGI(TAG, "Mode successfully set to %s", mode_name);
     #endif
 
     // Wait a bit and verify mode is stable
@@ -276,9 +272,7 @@ if (err != ESP_OK) {
     uint8_t canstat_after = MCP2515_readRegister(MCP_CANSTAT);
     uint8_t final_mode = (canstat_after >> 5) & 0x07;
     #if MCP2515_ADAPTER_DEBUG
-    if (cfg->enable_debug_spi) {
-        ESP_LOGI(TAG, "Mode stability check: CANSTAT=0x%02X (mode=%d)", canstat_after, final_mode);
-    }
+    ESP_LOGI(TAG, "Mode stability check: CANSTAT=0x%02X (mode=%d)", canstat_after, final_mode);
     #endif
     if (final_mode != ((target_mode >> 5) & 0x07)) {
         ESP_LOGE(TAG, "WARNING: Mode changed back! Expected %d, got %d",
@@ -312,9 +306,7 @@ if (err != ESP_OK) {
 
     // Re-apply requested mode after filter/mask configuration (they force config mode)
     #if MCP2515_ADAPTER_DEBUG
-    if (cfg->enable_debug_spi) {
-        ESP_LOGI(TAG, "Re-applying %s mode after filter/mask configuration", mode_name);
-    }
+    ESP_LOGI(TAG, "Re-applying %s mode after filter/mask configuration", mode_name);
     #endif
     MCP2515_modifyRegister(MCP_CANCTRL, CANCTRL_REQOP, target_mode);
     vTaskDelay(pdMS_TO_TICKS(20));
@@ -324,10 +316,8 @@ if (err != ESP_OK) {
         uint8_t current_mode = (canstat >> 5) & 0x07;
         uint8_t requested_mode = (target_mode >> 5) & 0x07;
         #if MCP2515_ADAPTER_DEBUG
-        if (cfg->enable_debug_spi) {
-            ESP_LOGI(TAG, "  Re-apply attempt %d: CANSTAT=0x%02X (mode=%d), want mode=%d",
-                     attempt, canstat, current_mode, requested_mode);
-        }
+        ESP_LOGI(TAG, "  Re-apply attempt %d: CANSTAT=0x%02X (mode=%d), want mode=%d",
+                 attempt, canstat, current_mode, requested_mode);
         #endif
         if (current_mode == requested_mode) {
             mode2_ok = true;
@@ -337,16 +327,14 @@ if (err != ESP_OK) {
     }
     if (!mode2_ok) {
         #if MCP2515_ADAPTER_DEBUG
-        if (cfg->enable_debug_spi) {
-            ESP_LOGE(TAG, "Failed to re-apply %s mode after filter/mask configuration", mode_name);
-        }
+        ESP_LOGE(TAG, "Failed to re-apply %s mode after filter/mask configuration", mode_name);
         #endif
         return false;
     }
     
     // Step 8: Configure interrupts
     gpio_config_t io_conf = {
-        .pin_bit_mask = 1ULL << cfg->int_pin,
+        .pin_bit_mask = 1ULL << s_bundle->devices[0].wiring.int_gpio,
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -355,7 +343,7 @@ if (err != ESP_OK) {
     
     err = gpio_config(&io_conf);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to configure GPIO %d: %s", cfg->int_pin, esp_err_to_name(err));
+        ESP_LOGE(TAG, "Failed to configure GPIO %d: %s", s_bundle->devices[0].wiring.int_gpio, esp_err_to_name(err));
         return false;
     }
     
@@ -367,7 +355,7 @@ if (err != ESP_OK) {
     }
     
     // Step 10: Add interrupt handler
-    err = gpio_isr_handler_add(cfg->int_pin, isr_handler, NULL);
+    err = gpio_isr_handler_add(s_bundle->devices[0].wiring.int_gpio, isr_handler, NULL);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to add interrupt handler: %s", esp_err_to_name(err));
         return false;
@@ -375,9 +363,7 @@ if (err != ESP_OK) {
     
     ESP_LOGI(TAG, "MCP2515 adapter initialized successfully");
     #if MCP2515_ADAPTER_DEBUG
-    if (cfg->enable_debug_spi) {
-        mcp2515_diagnostics();
-    }
+    mcp2515_diagnostics();
     #endif
     return true;
 }
@@ -394,8 +380,8 @@ bool mcp2515_single_deinit() {
     }
     
     // Step 2: Remove interrupt handler
-    if (mcp2515_config.int_pin >= 0) {
-        esp_err_t err = gpio_isr_handler_remove(mcp2515_config.int_pin);
+    if (s_bundle && s_bundle->devices[0].wiring.int_gpio >= 0) {
+        esp_err_t err = gpio_isr_handler_remove(s_bundle->devices[0].wiring.int_gpio);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "Failed to remove interrupt handler: %s", esp_err_to_name(err));
             return false;
@@ -411,8 +397,8 @@ bool mcp2515_single_deinit() {
         }
     }
     
-    // Step 4: Free SPI bus
-    esp_err_t err = spi_bus_free(mcp2515_config.spi_host);
+    // Step 4: Free SPI bus (if managed here)
+    esp_err_t err = spi_bus_free(s_bundle ? s_bundle->bus.params.host : SPI2_HOST);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to free SPI bus: %s", esp_err_to_name(err));
         return false;

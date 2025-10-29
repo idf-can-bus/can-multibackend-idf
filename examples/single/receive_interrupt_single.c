@@ -100,11 +100,7 @@ void app_main(void)
     }
 
     // identify your self as receiver
-#if CONFIG_CAN_BACKEND_TWAI
-    ESP_LOGI(TAG, "Receiver interrupt-driven, single controller, MCP2515");
-#else
-    ESP_LOGI(TAG, "Receiver interrupt-driven, MCP2515");
-#endif
+    ESP_LOGI(TAG, "Receiver interrupt-driven");
 
     // --- start tasks ------------------------------------------------------------------------------
     BaseType_t ok1 = xTaskCreate(can_rx_producer_task, "can_rx_prod", PRODUCER_TASK_STACK, NULL, PRODUCER_TASK_PRIO, NULL);

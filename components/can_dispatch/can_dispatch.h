@@ -8,8 +8,12 @@
 #include "twai_config_types.h"
 #include "twai_adapter.h"
 #elif CONFIG_CAN_BACKEND_MCP2515_SINGLE
+// Use unified MCP2515 config types for all MCP2515 variants
+#include "components/can_backend_mcp2515_multi/mcp2515_config_types.h"
 #include "mcp2515_single_adapter.h"
 #elif CONFIG_CAN_BACKEND_MCP2515_MULTI
+// Use unified MCP2515 config types for all MCP2515 variants
+#include "components/can_backend_mcp2515_multi/mcp2515_config_types.h"
 #include "mcp2515_multi_adapter.h"
 #elif CONFIG_CAN_BACKEND_ARDUINO
 #include "can_backend_arduino.h"
@@ -29,11 +33,11 @@ extern "C" {
     /* call TWAI backend */
     typedef twai_backend_config_t can_config_t;
 #elif CONFIG_CAN_BACKEND_MCP2515_SINGLE
-    /* call MCP2515 backend */
-    typedef mcp2515_single_config_t can_config_t;
+    /* call MCP2515 backend (single) using unified bundle */
+    typedef mcp2515_bundle_config_t can_config_t;
 #elif CONFIG_CAN_BACKEND_MCP2515_MULTI
-    /* call multi-MCP backend */
-    typedef mcp_multi_instance_cfg_t can_config_t;
+    /* call MCP2515 backend (multi) using unified bundle */
+    typedef mcp2515_bundle_config_t can_config_t;
 #elif CONFIG_CAN_BACKEND_ARDUINO
     /* call Arduino backend */
     // TODO: Define Arduino config type

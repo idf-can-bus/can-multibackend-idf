@@ -18,8 +18,26 @@ elseif(CONFIG_EXAMPLE_RECV_INT_MULTI)
     list(APPEND APP_SRC "${EXAMPLES_DIR}/multi/receive_interrupt_multi.c")
 endif()
 
+# Build required component list conditionally by selected backend
+set(REQUIRES_DEPS can_dispatch examples_utils)
+
+if(CONFIG_CAN_BACKEND_TWAI)
+    list(APPEND REQUIRES_DEPS can_backend_twai)
+endif()
+
+if(CONFIG_CAN_BACKEND_MCP2515_SINGLE)
+    list(APPEND REQUIRES_DEPS can_backend_mcp2515_single)
+    # unified MCP2515 config types are provided by the multi component
+    list(APPEND REQUIRES_DEPS can_backend_mcp2515_multi)
+endif()
+
+# (optional) future: multi-backend
+# if(CONFIG_CAN_BACKEND_MCP2515_MULTI)
+#     list(APPEND REQUIRES_DEPS can_backend_mcp2515_multi)
+# endif()
+
 idf_component_register(
     SRCS ${APP_SRC}
     INCLUDE_DIRS "." "${EXAMPLES_DIR}"
-    REQUIRES can_dispatch examples_utils can_backend_twai
+    REQUIRES ${REQUIRES_DEPS}
 )
