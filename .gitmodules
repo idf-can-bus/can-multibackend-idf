@@ -1,3 +1,9 @@
 [submodule "components/can_backend_mcp2515_single/mcp2515-esp32-idf"]
 	path = components/can_backend_mcp2515_single/mcp2515-esp32-idf
 	url = https://github.com/Microver-Electronics/mcp2515-esp32-idf.git
+[submodule "components/examples_utils"]
+	path = components/examples_utils
+	url = git@github.com:esp32-can/esp32-can-examples-utils.git
+[submodule "components/can_backend_mcp2515_multi/esp32-can-mcp2515-multi"]
+	path = components/can_backend_mcp2515_multi/esp32-can-mcp2515-multi
+	url = https://github.com/esp32-can/esp32-can-mcp2515-multi
