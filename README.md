@@ -17,12 +17,20 @@ This project provides a modular, unified interface for CAN bus communication on 
 - **MCP2515 multi-controller** — for setups with multiple MCP2515 chips
 
 ## Example Applications
-- `send_single` — Send CAN messages (single controller)
-- `receive_poll_single` — Receive CAN messages (polling, single controller)
-- `receive_interrupt_single` — Receive CAN messages (interrupt, single controller)
-- `send_multi` — Send CAN messages (multi-controller)
-- `receive_poll_multi` — Receive CAN messages (polling, multi-controller)
-- `receive_interrupt_multi` — Receive CAN messages (interrupt, multi-controller)
+
+Examples are maintained in their respective component repositories:
+
+**TWAI (Single Device):**
+- See [`components/twai-idf-can/examples/`](components/twai-idf-can/examples/)
+- Send, receive (polling), receive (interrupt)
+- Direct `can_twai_*` API
+
+**MCP2515 (Multi Device):**
+- See [`components/mcp25xxx-multi-idf-can/examples/`](components/mcp25xxx-multi-idf-can/examples/)
+- Send from multiple TX, receive from multiple RX
+- Multi-device `canif_*` API
+
+For more details, see [`examples/README.md`](examples/README.md)
 
 ## Typical Wiring (MCP2515 example)
 ![Single MCP2515 wiring](doc/single_setup.wiring.drawio.png)
