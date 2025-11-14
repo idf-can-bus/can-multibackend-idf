@@ -13,9 +13,6 @@ menu "*** CAN bus examples  ***"
     config CAN_BACKEND_MCP2515_MULTI
         bool "MCP2515 multi-controller"
     
-    #config CAN_BACKEND_ARDUINO
-    #    bool "Arduino CAN port"
-    
     endchoice
 
     choice

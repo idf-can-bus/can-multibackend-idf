@@ -16,8 +16,6 @@ bool canif_init(const can_config_t *cfg)
 #elif CONFIG_CAN_BACKEND_MCP2515_MULTI
     /* call multi-MCP backend (new interface) */
     return canif_multi_init_default((const mcp2515_bundle_config_t*)cfg);
-#elif CONFIG_CAN_BACKEND_ARDUINO
-    /* call Arduino backend */
 #endif
     return false;
 }
@@ -34,8 +32,6 @@ bool canif_deinit()
 #elif CONFIG_CAN_BACKEND_MCP2515_MULTI
     /* call multi-MCP backend (new interface) */
     return canif_multi_deinit_default();
-#elif CONFIG_CAN_BACKEND_ARDUINO
-    /* call Arduino backend */
 #endif
     return false;
 }
@@ -52,8 +48,6 @@ bool canif_send(const twai_message_t *msg)
 #elif CONFIG_CAN_BACKEND_MCP2515_MULTI
     /* call multi-MCP backend (new interface) */
     return canif_multi_send_default(msg);
-#elif CONFIG_CAN_BACKEND_ARDUINO
-    /* call Arduino backend */
 #endif
     return false;
 }
@@ -71,8 +65,6 @@ bool canif_receive(twai_message_t *msg)
     /* call multi-MCP backend (new interface) */
     // For now, use default device receive
     return canif_receive_default(msg);
-#elif CONFIG_CAN_BACKEND_ARDUINO
-    /* call Arduino backend */
 #endif
     return false;
 }

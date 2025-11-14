@@ -6,7 +6,7 @@
 
 #include "examples_utils.h"
 #include "can_dispatch.h"
-#include "hw_init_by_settings.h"
+
 
 
 /*

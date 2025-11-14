@@ -10,9 +10,8 @@
 /*
  * Example: receive_interrupt_multi
  *
- * Note: Hardware configuration (number of instances, CS/INT pins) je stanovena
- * v examples/init_hardware.c. Tento příklad si počet instancí načítá dynamicky
- * přes can_configured_instance_count().
+ * Note: Hardware configuration (number of instances, CS/INT pins) is 
+ * set in examples/multi/config_hw_mcp2515_multi_receive.h and.
  */
 
 static const char *TAG = "receive_interrupt_multi";

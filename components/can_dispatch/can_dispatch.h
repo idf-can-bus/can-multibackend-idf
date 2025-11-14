@@ -2,20 +2,45 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "driver/twai.h"
-
 #include "sdkconfig.h"
+
+
+// Include the example's header-only HW configuration based on selected backend.
 #if CONFIG_CAN_BACKEND_TWAI
-#include "twai_config_types.h"
-#include "twai_adapter.h"
+
+#elif CONFIG_CAN_BACKEND_MCP2515_SINGLE
+
+#elif CONFIG_CAN_BACKEND_MCP2515_MULTI
+#if CONFIG_EXAMPLE_SEND_MULTI
+#include "multi/config_hw_mcp2515_multi_send.h"
+#elif CONFIG_EXAMPLE_RECV_POLL_MULTI || CONFIG_EXAMPLE_RECV_INT_MULTI
+#include "multi/config_hw_mcp2515_multi_receive.h"
+#else
+#include "single/config_hw_mcp2515_multiple.h" // fallback: single-device on multi backend
+#endif
+#endif
+
+#if CONFIG_CAN_BACKEND_TWAI
+#include "can_twai_config.h"
+#include "can_twai.h"
+#include "single/config_hw_twai.h" // the default configuration for the TWAI backend
 #elif CONFIG_CAN_BACKEND_MCP2515_SINGLE
 // Use unified MCP2515 config types for all MCP2515 variants
 #include "mcp2515_multi.h"
 #include "mcp2515_single_adapter.h"
+#include "single/config_hw_mcp2515_single.h" // the default configuration for the MCP2515_SINGLE backend
 #elif CONFIG_CAN_BACKEND_MCP2515_MULTI
 // Multi MCP2515 backend interface (bus/dev registry + messaging)
 #include "mcp2515_multi.h"
-#elif CONFIG_CAN_BACKEND_ARDUINO
-#include "can_backend_arduino.h"
+#if CONFIG_EXAMPLE_SEND_MULTI || CONFIG_EXAMPLE_SEND_SINGLE
+#include "multi/config_hw_mcp2515_multi_send.h" // the default configuration for the MCP2515_MULTI backend
+#elif CONFIG_EXAMPLE_RECV_POLL_MULTI || CONFIG_EXAMPLE_RECV_INT_MULTI || CONFIG_EXAMPLE_RECV_POLL_SINGLE || CONFIG_EXAMPLE_RECV_INT_SINGLE
+#include "multi/config_hw_mcp2515_multi_receive.h" // the default configuration for the MCP2515_MULTI backend
+#else
+#error "Unknown example for the MCP2515_MULTI backend"
+#endif
+#else 
+#error "Unknown backend"
 #endif
 
 #include "freertos/FreeRTOS.h"
@@ -37,9 +62,6 @@ extern "C" {
 #elif CONFIG_CAN_BACKEND_MCP2515_MULTI
     /* call MCP2515 backend (multi) using unified bundle */
     typedef mcp2515_bundle_config_t can_config_t;
-#elif CONFIG_CAN_BACKEND_ARDUINO
-    /* call Arduino backend */
-    // TODO: Define Arduino config type
 #endif
 
 // --- Polymorphic functions for handling CAN hardware --------------------------------------------

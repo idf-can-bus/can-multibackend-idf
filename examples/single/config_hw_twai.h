@@ -3,10 +3,11 @@
 #include "driver/gpio.h"
 #include "driver/twai.h"
 #include "freertos/FreeRTOS.h"
-#include "twai_config_types.h"
+#include "can_twai_config.h"
 #include "can_dispatch.h"
 
-// Final split HW configuration in a single constant (values from current init_hardware.c)
+// Final split HW configuration in a single constant.
+// Hardware configuration is set in examples/single/config_hw_twai.h.
 const twai_backend_config_t CAN_HW_CFG = {
     .wiring = {
         .tx_gpio   = GPIO_NUM_39,

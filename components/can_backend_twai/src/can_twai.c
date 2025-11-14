@@ -1,18 +1,30 @@
-#include "twai_adapter.h"
+/**
+ * @file can_twai.c
+ * @brief Implementation of ESP32 TWAI (CAN) adapter
+ * 
+ * This file implements the high-level TWAI adapter functions declared in can_twai.h.
+ * It wraps ESP-IDF's TWAI driver to provide simplified initialization, message
+ * transmission/reception, and automatic error recovery.
+ * 
+ * @author Ivo Marvan
+ * @date 2025
+ */
+
+#include "can_twai.h"
 #include <stdio.h>
 #include "esp_log.h"
 #include "driver/twai.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <string.h>
-#include <inttypes.h>  // for PRIu32, PRIu8, ect.
+#include <inttypes.h>  // for PRIu32, PRIu8, etc.
 
+/** @brief Logging tag for this module */
 static const char* TAG = "can_backend_twai";
 
-// Remember TWAI configuration (split) from can_twai_init
+/** @brief Stored configuration for timeout and recovery operations */
 static twai_backend_config_t twai_config;
 
-// Initialize CAN hardware
 bool can_twai_init(const twai_backend_config_t *cfg)  
 {
     ESP_LOGD(TAG, "Initializing TWAI driver with:");
@@ -64,7 +76,6 @@ bool can_twai_init(const twai_backend_config_t *cfg)
     return true;
 }
 
-// Deinitialize CAN hardware
 bool can_twai_deinit() 
 {
      // Stop TWAI driver
@@ -84,7 +95,6 @@ bool can_twai_deinit()
     return true;
 }
 
-
 bool can_twai_send(const twai_message_t *msg)
 {
     // Validate message length
@@ -97,19 +107,14 @@ bool can_twai_send(const twai_message_t *msg)
     esp_err_t err = twai_transmit(msg, twai_config.timeouts.transmit_timeout);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to send message: %s", esp_err_to_name(err));
-        can_twai_reset_twai_if_needed();
+        can_twai_reset_if_needed();
         return false;
     }
     ESP_LOGD(TAG, "Message sent: ID=0x%lX", msg->identifier);
     return true;
 }
 
-/**
- * Checks TWAI controller status and resets it if necessary.
- * This handles bus-off conditions and restarts the controller
- * if it's not in the running state.
- */
-void can_twai_reset_twai_if_needed(void) {
+void can_twai_reset_if_needed(void) {
     twai_status_info_t status;
     if (twai_get_status_info(&status) == ESP_OK) {
         if (status.state == TWAI_STATE_BUS_OFF) {
@@ -123,7 +128,7 @@ void can_twai_reset_twai_if_needed(void) {
             twai_start();
         }
     }
-} // can_twai_reset_twai_if_needed
+} // can_twai_reset_if_needed
 
 bool can_twai_receive(twai_message_t *msg)
 {
@@ -149,7 +154,7 @@ bool can_twai_receive(twai_message_t *msg)
         // Log only real errors, timeout is expected
         ESP_LOGE(TAG, "Error receiving message: %s (error code: %d)", 
                  esp_err_to_name(err), err);
-        can_twai_reset_twai_if_needed();
+        can_twai_reset_if_needed();
         return false;
     }    
     return false;

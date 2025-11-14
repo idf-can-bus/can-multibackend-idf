@@ -3,10 +3,10 @@
 Unified CAN-bus interface and example suite for ESP32
 ====================================================
 
-This project provides a modular, unified interface for CAN bus communication on ESP32, supporting multiple hardware backends (TWAI, MCP2515 single/multi, Arduino) and a suite of ready-to-use examples. It is designed for easy switching between different CAN controllers and for rapid prototyping or testing of CAN networks with ESP32.
+This project provides a modular, unified interface for CAN bus communication on ESP32, supporting multiple hardware backends (TWAI, MCP2515 single/multi) and a suite of ready-to-use examples. It is designed for easy switching between different CAN controllers and for rapid prototyping or testing of CAN networks with ESP32.
 
 ## Features
-- Unified API for multiple CAN backends (TWAI, MCP2515 single/multi, Arduino)
+- Unified API for multiple CAN backends (TWAI, MCP2515 single/multi)
 - Example applications for sending/receiving CAN messages (polling/interrupt)
 - Easy configuration via Kconfig (menuconfig)
 - Python-based flash manager with GUI for multi-device workflows
@@ -15,7 +15,6 @@ This project provides a modular, unified interface for CAN bus communication on 
 - **Built-in TWAI (SN65HVD230)** — ESP32's native CAN controller
 - **MCP2515 single controller** — via SPI, for external CAN modules
 - **MCP2515 multi-controller** — for setups with multiple MCP2515 chips
-- **Arduino CAN port** (experimental, not yet implemented)
 
 ## Example Applications
 - `send_single` — Send CAN messages (single controller)

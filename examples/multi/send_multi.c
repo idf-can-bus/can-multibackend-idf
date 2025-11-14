@@ -5,7 +5,8 @@
 
 /*
  * Example: send_multi
- * Uses MCP2515 multi adapter with two TX controllers on SPI2 (per init_hardware.c configuration).
+ * Uses MCP2515 multi adapter with two TX controllers on SPI2.
+ * Hardware configuration is set in examples/multi/config_hw_mcp2515_multi_send.h.
  */
 
 static const char *TAG = "send_multi";
