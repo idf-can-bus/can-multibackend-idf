@@ -41,8 +41,8 @@ elseif(CONFIG_EXAMPLE_RECV_INT_MULTI)
 endif()
 
 # Build required component list conditionally by selected backend
-# Note: examples_utils is provided by example submodules (twai-idf-can, mcp25xxx-multi-idf-can)
-set(REQUIRES_DEPS can_dispatch)
+# Note: examples-utils-idf-can is provided by example submodules via EXTRA_COMPONENT_DIRS
+set(REQUIRES_DEPS can_dispatch examples-utils-idf-can)
 
 if(CONFIG_CAN_BACKEND_TWAI)
     list(APPEND REQUIRES_DEPS twai-idf-can)
